@@ -9,6 +9,7 @@ import { API_URL } from '../config/api';
 import usePageTitle from '../hooks/usePageTitle';
 import toast from '../utils/toast';
 
+
 const Assets = ({ onDelete }) => {
   usePageTitle('Assets');
   const navigate = useNavigate();
