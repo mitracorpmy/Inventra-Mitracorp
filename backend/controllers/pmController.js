@@ -772,7 +772,15 @@ const deletePM = async (req, res, next) => {
       });
     }
     
-    logger.info(`PM record deleted: PM_ID ${pmId}`);
+    // ✨ NEW: Manually record the DELETE action in the History Log ✨
+    const userId = req.user?.userId || null;
+    await pool.execute(
+      `INSERT INTO HISTORY_LOG (User_ID, Table_Name, Record_ID, Action_Type, Action_Desc, Timestamp) 
+       VALUES (?, 'PMAINTENANCE', ?, 'DELETE', ?, NOW())`,
+      [userId, pmId, `Deleted PM record (ID: ${pmId})`]
+    );
+    
+    logger.info(`PM record soft-deleted: PM_ID ${pmId}`);
     res.status(200).json({
       success: true,
       message: 'PM record deleted successfully'
@@ -1141,7 +1149,7 @@ const bulkDeletePM = async (req, res, next) => {
       });
     }
 
-// Verify user is authenticated (JWT middleware should set req.user)
+    // Verify user is authenticated (JWT middleware should set req.user)
     if (!req.user || !req.user.userId) {
       return res.status(401).json({
         success: false,
@@ -1176,20 +1184,24 @@ const bulkDeletePM = async (req, res, next) => {
       });
     }
 
-    // Delete PM records (cascade will handle PM_RESULT deletion)
+    // ✨ NEW: Soft delete instead of hard delete, preserving PM_RESULT entries for restoration ✨
     let deletedCount = 0;
     const errors = [];
 
     for (const pmId of pmIds) {
       try {
-        // First delete from PM_RESULT
-        await executeQuery('DELETE FROM PM_RESULT WHERE PM_ID = ?', [pmId]);
-        
-        // Then delete from PMAINTENANCE
-        const result = await executeQuery('DELETE FROM PMAINTENANCE WHERE PM_ID = ?', [pmId]);
+        // Soft delete PMAINTENANCE (keep PM_RESULT intact so it can be restored perfectly)
+        const result = await executeQuery('UPDATE PMAINTENANCE SET is_deleted = 1 WHERE PM_ID = ?', [pmId]);
         
         if (result.affectedRows > 0) {
           deletedCount++;
+          
+          // ✨ NEW: Manually record the bulk DELETE action in the History Log ✨
+          await executeQuery(
+            `INSERT INTO HISTORY_LOG (User_ID, Table_Name, Record_ID, Action_Type, Action_Desc, Timestamp) 
+             VALUES (?, 'PMAINTENANCE', ?, 'DELETE', ?, NOW())`,
+            [req.user.userId, pmId, `Deleted PM record (ID: ${pmId})`]
+          );
         }
       } catch (error) {
         logger.error(`Error deleting PM_ID ${pmId}:`, error);
@@ -1198,7 +1210,7 @@ const bulkDeletePM = async (req, res, next) => {
     }
 
     // Log the deletion
-    logger.info(`User ${req.user.userId} deleted ${deletedCount} PM records`);
+    logger.info(`User ${req.user.userId} soft-deleted ${deletedCount} PM records`);
 
     res.status(200).json({
       success: true,
@@ -1265,11 +1277,11 @@ const getPMHistoryForAssets = async (req, res, next) => {
     // Create ?,?,? placeholders for SQL query based on how many assets were selected
     const placeholders = assetIds.map(() => '?').join(',');
     
-    // Fetch all PM records for these specific assets, sorted from oldest to newest
+    // ✨ NEW: Added `is_deleted = 0` so deleted forms don't show up in the Bulk Download modal ✨
     const [records] = await pool.execute(
       `SELECT PM_ID, Asset_ID, PM_Date, Status 
        FROM PMAINTENANCE 
-       WHERE Asset_ID IN (${placeholders})
+       WHERE Asset_ID IN (${placeholders}) AND is_deleted = 0
        ORDER BY Asset_ID, PM_Date ASC`,
       assetIds
     );

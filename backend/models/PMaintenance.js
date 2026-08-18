@@ -1,70 +1,57 @@
 const { pool } = require('../config/database');
+const PDFGenerator = require('../utils/pdfGenerator');
 
 class PMaintenance {
   constructor(data) {
     this.PM_ID = data.PM_ID;
     this.Asset_ID = data.Asset_ID;
     this.PM_Date = data.PM_Date;
-    this.Remarks = data.Remarks;const { pool } = require('../config/database');
-    const PDFGenerator = require('../utils/pdfGenerator');
-    
-    class PMaintenance {
-      // ... (all your existing static methods like findAll, getStatistics, etc.)
-    
-      /**
-       * Find all PM records for a given list of asset IDs
-       * and calculate their sequence number.
-       */
-      static async findPMHistoryByAssetIds(assetIds) {
-        if (!assetIds || assetIds.length === 0) {
-          return [];
-        }
-    
-        try {
-          const placeholders = assetIds.map(() => '?').join(',');
-          
-          // This complex query uses window functions to calculate the PM sequence number for each asset efficiently
-          const query = `
-            SELECT 
-              PM_ID,
-              Asset_ID,
-              PM_Date,
-              Status,
-              ROW_NUMBER() OVER(PARTITION BY Asset_ID ORDER BY PM_Date ASC, PM_ID ASC) as pmSequence
-            FROM 
-              PMAINTENANCE
-            WHERE 
-              Asset_ID IN (${placeholders})
-            ORDER BY 
-              Asset_ID, PM_Date ASC, PM_ID ASC;
-          `;
-    
-          const [rows] = await pool.execute(query, assetIds);
-          return rows;
-        } catch (error) {
-          console.error('Error in findPMHistoryByAssetIds:', error);
-          throw error;
-        }
-      }
-    }
-    
-    module.exports = PMaintenance;
-    
+    this.Remarks = data.Remarks;
     this.Status = data.Status;
+  }
+
+  // Find all PM records for a given list of asset IDs
+  static async findPMHistoryByAssetIds(assetIds) {
+    if (!assetIds || assetIds.length === 0) {
+      return [];
+    }
+
+    try {
+      const placeholders = assetIds.map(() => '?').join(',');
+      
+      const query = `
+        SELECT 
+          PM_ID,
+          Asset_ID,
+          PM_Date,
+          Status,
+          ROW_NUMBER() OVER(PARTITION BY Asset_ID ORDER BY PM_Date ASC, PM_ID ASC) as pmSequence
+        FROM 
+          PMAINTENANCE
+        WHERE 
+          Asset_ID IN (${placeholders}) AND is_deleted = 0
+        ORDER BY 
+          Asset_ID, PM_Date ASC, PM_ID ASC;
+      `;
+
+      const [rows] = await pool.execute(query, assetIds);
+      return rows;
+    } catch (error) {
+      console.error('Error in findPMHistoryByAssetIds:', error);
+      throw error;
+    }
   }
 
   // Get all PM records with asset, project, and customer details
   static async findAll(allowedProjectIds = null) {
     try {
-      let whereClause = '';
+      let whereClause = 'WHERE pm.is_deleted = 0';
       let queryParams = [];
       
-      // Add Project_ID filter for customer-type users
       if (allowedProjectIds && Array.isArray(allowedProjectIds) && allowedProjectIds.length > 0) {
         const placeholders = allowedProjectIds.map(() => '?').join(',');
-        whereClause = `WHERE p.Project_ID IN (${placeholders})`;
+        whereClause += ` AND p.Project_ID IN (${placeholders})`;
         queryParams = [...allowedProjectIds];
-        console.log('🔍 PM findAll - Filtering by Project_IDs:', allowedProjectIds);
       }
       
       const query = `
@@ -118,45 +105,26 @@ class PMaintenance {
   // Get PM statistics
   static async getStatistics(allowedProjectIds = null) {
     try {
-      let whereClause = '';
+      let whereClause = 'WHERE pm.is_deleted = 0';
       let queryParams = [];
       
-      // Add Project_ID filter for customer-type users
       if (allowedProjectIds && Array.isArray(allowedProjectIds) && allowedProjectIds.length > 0) {
         const placeholders = allowedProjectIds.map(() => '?').join(',');
-        whereClause = `WHERE pm.Asset_ID IN (
+        whereClause += ` AND pm.Asset_ID IN (
           SELECT i.Asset_ID 
           FROM INVENTORY i 
           WHERE i.Project_ID IN (${placeholders})
         )`;
         queryParams = [...allowedProjectIds];
-        console.log('🔍 PM getStatistics - Filtering by Project_IDs:', allowedProjectIds);
       }
       
-      // Total PM records
-      const totalQuery = `
-        SELECT COUNT(*) as total 
-        FROM PMAINTENANCE pm
-        ${whereClause}
-      `;
+      const totalQuery = `SELECT COUNT(*) as total FROM PMAINTENANCE pm ${whereClause}`;
       const [totalResult] = await pool.execute(totalQuery, queryParams);
 
-      // PM this year (based on PM_Date)
-      const thisYearQuery = `
-        SELECT COUNT(*) as count
-        FROM PMAINTENANCE pm
-        ${whereClause ? whereClause + ' AND' : 'WHERE'} YEAR(pm.PM_Date) = YEAR(CURDATE())
-      `;
+      const thisYearQuery = `SELECT COUNT(*) as count FROM PMAINTENANCE pm ${whereClause} AND YEAR(pm.PM_Date) = YEAR(CURDATE())`;
       const [thisYearResult] = await pool.execute(thisYearQuery, queryParams);
 
-      // PM this month (based on PM_Date)
-      const thisMonthQuery = `
-        SELECT COUNT(*) as count
-        FROM PMAINTENANCE pm
-        ${whereClause ? whereClause + ' AND' : 'WHERE'} 
-        YEAR(pm.PM_Date) = YEAR(CURDATE())
-        AND MONTH(pm.PM_Date) = MONTH(CURDATE())
-      `;
+      const thisMonthQuery = `SELECT COUNT(*) as count FROM PMAINTENANCE pm ${whereClause} AND YEAR(pm.PM_Date) = YEAR(CURDATE()) AND MONTH(pm.PM_Date) = MONTH(CURDATE())`;
       const [thisMonthResult] = await pool.execute(thisMonthQuery, queryParams);
 
       return {
@@ -170,13 +138,11 @@ class PMaintenance {
     }
   }
 
-  // Get unique customers
   static async getCustomers(allowedProjectIds = null) {
     try {
       let whereClause = '';
       let queryParams = [];
       
-      // Add Project_ID filter for customer-type users
       if (allowedProjectIds && Array.isArray(allowedProjectIds) && allowedProjectIds.length > 0) {
         const placeholders = allowedProjectIds.map(() => '?').join(',');
         whereClause = `WHERE c.Customer_ID IN (
@@ -185,11 +151,8 @@ class PMaintenance {
           WHERE i.Project_ID IN (${placeholders})
         )`;
         queryParams = [...allowedProjectIds];
-        console.log('🔍 PM getCustomers - Filtering by Project_IDs:', allowedProjectIds);
       }
       
-      // Get all customers grouped by Customer_Ref_Number (1 project = 1 customer)
-      // This will show all customers even if they don't have PM records yet
       const query = `
         SELECT DISTINCT 
           c.Customer_Ref_Number as Customer_ID,
@@ -209,10 +172,8 @@ class PMaintenance {
     }
   }
 
-  // Get branches by customer reference number
   static async getBranchesByCustomer(customerRefNumber) {
     try {
-      // Get all branches for this customer reference (since customerId is now Customer_Ref_Number)
       const [rows] = await pool.execute(`
         SELECT DISTINCT Branch
         FROM CUSTOMER
@@ -226,7 +187,6 @@ class PMaintenance {
     }
   }
 
-  // Get PM data filtered by customer and branch
   static async findByCustomerAndBranch(customerRefNumber, branch) {
     try {
       const [rows] = await pool.execute(`
@@ -259,7 +219,7 @@ class PMaintenance {
         INNER JOIN INVENTORY i ON a.Asset_ID = i.Asset_ID
         INNER JOIN CUSTOMER cust ON i.Customer_ID = cust.Customer_ID
         LEFT JOIN PROJECT p ON i.Project_ID = p.Project_ID
-        LEFT JOIN PMAINTENANCE pm ON a.Asset_ID = pm.Asset_ID
+        LEFT JOIN PMAINTENANCE pm ON a.Asset_ID = pm.Asset_ID AND pm.is_deleted = 0
         WHERE cust.Customer_Ref_Number = ? AND cust.Branch = ?
         ORDER BY c.Category, a.Asset_ID, pm.PM_Date ASC
       `, [customerRefNumber, branch]);
@@ -270,7 +230,6 @@ class PMaintenance {
     }
   }
 
-  // Get PM checklist for a specific category
   static async getChecklistByCategory(categoryId) {
     try {
       const [rows] = await pool.execute(`
@@ -293,7 +252,6 @@ class PMaintenance {
     }
   }
 
-  // Get PM results for a specific PM_ID
   static async getResultsByPMId(pmId) {
     try {
       const [rows] = await pool.execute(`
@@ -320,10 +278,8 @@ class PMaintenance {
     }
   }
 
-  // Get detailed PM with checklist results
   static async getDetailedPM(pmId) {
     try {
-      // Get PM basic info
       const [pmRows] = await pool.execute(`
         SELECT 
           pm.*,
@@ -353,17 +309,13 @@ class PMaintenance {
         LEFT JOIN CUSTOMER cust ON inv.Customer_ID = cust.Customer_ID
         LEFT JOIN PROJECT p ON inv.Project_ID = p.Project_ID
         LEFT JOIN USER u ON pm.Created_By = u.User_ID
-        WHERE pm.PM_ID = ?
+        WHERE pm.PM_ID = ? AND pm.is_deleted = 0
       `, [pmId]);
 
       if (pmRows.length === 0) return null;
 
       const pmData = pmRows[0];
-
-      // Get checklist results
       pmData.checklist_results = await this.getResultsByPMId(pmId);
-      
-      // Get peripherals for the asset
       pmData.peripherals = await this.getPeripheralsByAssetId(pmData.Asset_ID);
 
       return pmData;
@@ -373,10 +325,8 @@ class PMaintenance {
     }
   }
 
-  // Get asset details for blank PM report
   static async getAssetForBlankPM(assetId) {
     try {
-      // Get asset basic info with all related data
       const [assetRows] = await pool.execute(`
         SELECT 
           a.Asset_ID,
@@ -407,22 +357,19 @@ class PMaintenance {
 
       const assetData = assetRows[0];
 
-      // Get checklist items for this category (empty, no results)
       if (assetData.Category_ID) {
         const checklistItems = await this.getAllChecklistItemsByCategory(assetData.Category_ID);
-        // Convert to blank checklist results format with index
         assetData.checklist_results = checklistItems.map((item, index) => ({
           Checklist_ID: item.Checklist_ID,
           Check_item_Long: item.Check_item_Long,
-          Is_OK_bool: null,  // Empty checkbox
-          Remarks: null,     // No remarks
-          index: index + 1   // Add index for display
+          Is_OK_bool: null,
+          Remarks: null,
+          index: index + 1
         }));
       } else {
         assetData.checklist_results = [];
       }
       
-      // Get peripherals for the asset
       assetData.peripherals = await this.getPeripheralsByAssetId(assetData.Asset_ID);
 
       return assetData;
@@ -432,11 +379,8 @@ class PMaintenance {
     }
   }
 
-  // Get PM data with checklist results grouped by category
   static async getPMWithChecklistByCustomerAndBranch(customerRefNumber, branch) {
     try {
-      // First get all ASSETS for this customer reference number and branch
-      // This includes assets WITH and WITHOUT PM records
       const [assetRows] = await pool.execute(`
         SELECT 
           a.Asset_ID,
@@ -458,15 +402,13 @@ class PMaintenance {
         LEFT JOIN RECIPIENTS r ON a.Recipients_ID = r.Recipients_ID
         INNER JOIN INVENTORY i ON a.Asset_ID = i.Asset_ID
         INNER JOIN CUSTOMER cust ON i.Customer_ID = cust.Customer_ID
-        LEFT JOIN PMAINTENANCE pm ON a.Asset_ID = pm.Asset_ID
+        LEFT JOIN PMAINTENANCE pm ON a.Asset_ID = pm.Asset_ID AND pm.is_deleted = 0
         WHERE cust.Customer_Ref_Number = ? AND cust.Branch = ?
         ORDER BY c.Category, a.Asset_Tag_ID, pm.PM_Date ASC
       `, [customerRefNumber, branch]);
 
-      // For each row, get its checklist results (only if PM_ID exists)
       const pmWithChecklists = await Promise.all(
         assetRows.map(async (row) => {
-          // If this row has no PM_ID, return it as-is with empty checklist
           if (!row.PM_ID) {
             return {
               ...row,
@@ -474,7 +416,6 @@ class PMaintenance {
             };
           }
 
-          // Otherwise, fetch checklist results for this PM
           const [checklistResults] = await pool.execute(`
             SELECT 
               pmr.PM_Result_ID,
@@ -506,7 +447,6 @@ class PMaintenance {
     }
   }
 
-  // Get all checklist items for a specific category
   static async getAllChecklistItemsByCategory(categoryId) {
     try {
       const [rows] = await pool.execute(`
@@ -529,36 +469,35 @@ class PMaintenance {
     }
   }
 
-  // Delete PM record and all related PM_RESULT entries
+  // ✨ NEW: Soft Delete Logic ✨
   static async deletePM(pmId) {
-    const connection = await pool.getConnection();
     try {
-      await connection.beginTransaction();
-      
-      // Delete all PM_RESULT entries for this PM_ID
-      await connection.execute(
-        'DELETE FROM PM_RESULT WHERE PM_ID = ?',
+      // Instead of deleting, we set is_deleted = 1
+      const [result] = await pool.execute(
+        'UPDATE PMAINTENANCE SET is_deleted = 1 WHERE PM_ID = ?',
         [pmId]
       );
-      
-      // Delete the PM record
-      const [result] = await connection.execute(
-        'DELETE FROM PMAINTENANCE WHERE PM_ID = ?',
-        [pmId]
-      );
-      
-      await connection.commit();
       return result.affectedRows > 0;
     } catch (error) {
-      await connection.rollback();
       console.error('Error in PMaintenance.deletePM:', error);
       throw error;
-    } finally {
-      connection.release();
     }
   }
 
-  // Get peripherals for a specific asset
+  // ✨ NEW: Restore Soft Deleted PM ✨
+  static async restorePM(pmId) {
+    try {
+      const [result] = await pool.execute(
+        'UPDATE PMAINTENANCE SET is_deleted = 0 WHERE PM_ID = ?',
+        [pmId]
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      console.error('Error in PMaintenance.restorePM:', error);
+      throw error;
+    }
+  }
+
   static async getPeripheralsByAssetId(assetId) {
     try {
       const [rows] = await pool.execute(`
@@ -578,7 +517,6 @@ class PMaintenance {
     }
   }
 
-  // Get PM records for a specific asset
   static async findByAssetId(assetId) {
     try {
       const [rows] = await pool.execute(`
@@ -594,7 +532,7 @@ class PMaintenance {
           CONCAT(u.First_Name, ' ', u.Last_Name) as Created_By_Name
         FROM PMAINTENANCE pm
         LEFT JOIN USER u ON pm.Created_By = u.User_ID
-        WHERE pm.Asset_ID = ?
+        WHERE pm.Asset_ID = ? AND pm.is_deleted = 0
         ORDER BY pm.PM_Date DESC
       `, [assetId]);
       return rows;
@@ -604,7 +542,6 @@ class PMaintenance {
     }
   }
 
-  // Create new PM record
   static async create(assetId, pmDate, remarks, status = 'In-Process', createdBy = null) {
     try {
       const [result] = await pool.execute(`
@@ -619,13 +556,11 @@ class PMaintenance {
     }
   }
 
-  // Create PM results for a PM record
   static async createResults(pmId, checklistResults) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
 
-      // checklistResults is an array of { Checklist_ID, Is_OK_bool, Remarks }
       for (const result of checklistResults) {
         await connection.execute(`
           INSERT INTO PM_RESULT (PM_ID, Checklist_ID, Is_OK_bool, Remarks)
@@ -644,13 +579,11 @@ class PMaintenance {
     }
   }
 
-  // Create PM record with results in one transaction
   static async createWithResults(assetId, pmDate, remarks, checklistResults, status = 'In-Process', createdBy = null) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
 
-      // Create PM record
       const [pmResult] = await connection.execute(`
         INSERT INTO PMAINTENANCE (Asset_ID, PM_Date, Remarks, Status, Created_By)
         VALUES (?, ?, ?, ?, ?)
@@ -658,7 +591,6 @@ class PMaintenance {
 
       const pmId = pmResult.insertId;
 
-      // Create PM results
       for (const result of checklistResults) {
         await connection.execute(`
           INSERT INTO PM_RESULT (PM_ID, Checklist_ID, Is_OK_bool, Remarks)
@@ -677,9 +609,6 @@ class PMaintenance {
     }
   }
 
-  // ============ CHECKLIST MANAGEMENT ============
-  
-  // Get all categories
   static async getAllCategories() {
     try {
       const [rows] = await pool.execute(`
@@ -694,7 +623,6 @@ class PMaintenance {
     }
   }
 
-  // Create new checklist item
   static async createChecklistItem(categoryId, checkItemLong) {
     try {
       const [result] = await pool.execute(`
@@ -709,7 +637,6 @@ class PMaintenance {
     }
   }
 
-  // Update checklist item
   static async updateChecklistItem(checklistId, checkItemLong) {
     try {
       const [result] = await pool.execute(`
@@ -725,10 +652,8 @@ class PMaintenance {
     }
   }
 
-  // Delete checklist item
   static async deleteChecklistItem(checklistId) {
     try {
-      // First check if this checklist item is used in any PM results
       const [pmResults] = await pool.execute(`
         SELECT COUNT(*) as count
         FROM PM_RESULT
@@ -751,13 +676,11 @@ class PMaintenance {
     }
   }
 
-  // Update checklist items order
   static async updateChecklistOrder(orderUpdates) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
       
-      // Update Display_Order for each checklist item
       for (const update of orderUpdates) {
         await connection.execute(
           'UPDATE PM_CHECKLIST SET Display_Order = ? WHERE Checklist_ID = ?',
@@ -776,7 +699,6 @@ class PMaintenance {
     }
   }
 
-  // Create new category
   static async createCategory(categoryName) {
     try {
       const [result] = await pool.execute(`
@@ -791,7 +713,6 @@ class PMaintenance {
     }
   }
 
-  // Update file_path_acknowledgement for a PM record
   static async updateAcknowledgementPath(pmId, filePath) {
     try {
       const [result] = await pool.execute(`
@@ -807,7 +728,6 @@ class PMaintenance {
     }
   }
 
-  // Update signature_path, signed_at, and optionally BagiPihak for a PM record
   static async updateSignature(pmId, signaturePath, signedAt, bagiPihak) {
     try {
       let query;
@@ -838,7 +758,6 @@ class PMaintenance {
     }
   }
 
-  // Mark PM as Completed without signature
   static async markAsCompleted(pmId) {
     try {
       const query = `

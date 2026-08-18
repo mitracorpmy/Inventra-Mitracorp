@@ -30,4 +30,8 @@ router.get('/export', authenticateToken, historyLogController.exportAuditLogs);
 // Create history log (for internal use/testing - protected route)
 router.post('/', authenticateToken, historyLogController.createHistoryLog);
 
+// Undo a soft-deleted record
+// Undo a soft-deleted record
+router.post('/undo/:logId', authenticateToken, historyLogController.undoAction);
+
 module.exports = router;

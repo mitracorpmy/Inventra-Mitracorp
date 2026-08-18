@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileText, Download, RefreshCw } from 'lucide-react';
+import { FileText, Download, RefreshCw, RotateCcw } from 'lucide-react'; // <-- Added RotateCcw for the Undo icon
 import usePageTitle from '../hooks/usePageTitle';
 import './AuditLog.css';
 import toast from '../utils/toast';
+import { API_URL } from '../config/api';
 import {
   getAuditLogs,
   getFilterOptions,
@@ -165,7 +166,6 @@ const AuditLog = () => {
   // Fetch filter options on mount
   useEffect(() => {
     fetchFilterOptions();
-    // Initial summary will be fetched by the filters useEffect below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -176,7 +176,7 @@ const AuditLog = () => {
     }
   }, [activeTab, fetchLogs]);
 
-  // Fetch summary whenever filters change (handles both initial and filter updates)
+  // Fetch summary whenever filters change
   useEffect(() => {
     if (activeTab === 'logs') {
       fetchSummary();
@@ -202,7 +202,6 @@ const AuditLog = () => {
 
   const handleApplyFilters = () => {
     setPagination(prev => ({ ...prev, currentPage: 1 }));
-    // fetchSummary will be called automatically by useEffect when filters change
   };
 
   const handleResetFilters = () => {
@@ -243,25 +242,19 @@ const AuditLog = () => {
   };
 
   const handleViewSessionLogs = async (session) => {
-    // MySQL stores timestamps in local timezone (+8 from UTC)
-    // Session times from DB are in UTC, but MySQL compares in local time
     const sessionStart = new Date(session.Session_Start);
     const sessionEnd = new Date(session.Session_End);
     
-    // Convert UTC to local time (+8 hours) to match MySQL storage
-    const localOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+    const localOffset = 8 * 60 * 60 * 1000;
     sessionStart.setTime(sessionStart.getTime() + localOffset);
     sessionEnd.setTime(sessionEnd.getTime() + localOffset);
     
-    // Set to start of hour and end of hour
     sessionStart.setMinutes(0, 0, 0);
     sessionEnd.setMinutes(59, 59, 999);
     
-    // Format as ISO string without timezone indicator (MySQL expects this)
     const startDateStr = sessionStart.toISOString().slice(0, 19);
     const endDateStr = sessionEnd.toISOString().slice(0, 19);
     
-    // Set filters to show only logs from this session
     const newFilters = {
       tableName: session.Table_Name,
       actionType: '',
@@ -271,12 +264,10 @@ const AuditLog = () => {
       searchTerm: ''
     };
     
-    // Update all states
     setFilters(newFilters);
     setPagination(prev => ({ ...prev, currentPage: 1, recordsPerPage: 25 }));
     setActiveTab('logs');
     
-    // Fetch logs directly with new filters
     try {
       setLoading(true);
       setError(null);
@@ -294,11 +285,41 @@ const AuditLog = () => {
         ...prev,
         ...data.pagination
       }));
-      
-      // Summary will be fetched automatically by useEffect when filters change
     } catch (err) {
       console.error('Error fetching session logs:', err);
       setError('Failed to load session logs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✨ NEW: Handle Undo Action ✨
+  const handleUndoAction = async (log) => {
+    if (!window.confirm(`Are you sure you want to restore the deleted record from table ${log.Table_Name} (ID: ${log.Record_ID})?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      // We will create this backend route in the next step!
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_URL}/history-logs/undo/${log.Log_ID}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.message || 'Failed to undo action');
+
+      toast.success('Record restored successfully!');
+      handleRefresh(); // Refresh logs to show the new "RESTORE" action
+    } catch (error) {
+      console.error('Error undoing action:', error);
+      toast.error(error.message || 'An error occurred while restoring the record.');
     } finally {
       setLoading(false);
     }
@@ -584,6 +605,8 @@ const AuditLog = () => {
                       <th>Action</th>
                       <th>Description</th>
                       <th>Changes</th>
+                      {/* ✨ NEW: Actions Column Header ✨ */}
+                      <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -623,6 +646,37 @@ const AuditLog = () => {
                             </div>
                           ) : (
                             '-'
+                          )}
+                        </td>
+                        {/* ✨ NEW: Undo Button rendering ✨ */}
+                        <td style={{ textAlign: 'center' }}>
+                          {log.Action_Type === 'DELETE' && (
+                            <button
+                              onClick={() => handleUndoAction(log)}
+                              style={{
+                                background: '#f8d7da',
+                                color: '#721c24',
+                                border: '1px solid #f5c6cb',
+                                padding: '6px 12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#f5c6cb';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = '#f8d7da';
+                              }}
+                              title="Restore this deleted record"
+                            >
+                              <RotateCcw size={14} /> Undo
+                            </button>
                           )}
                         </td>
                       </tr>
