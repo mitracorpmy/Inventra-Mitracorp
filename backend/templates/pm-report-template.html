@@ -11,12 +11,17 @@
             box-sizing: border-box;
         }
 
+        /* Force the document to stretch to the edges of the A4 page */
+        html, body {
+            width: 100%;
+        }
+
         body {
             font-family: Arial, sans-serif;
-            font-size: 7pt;
-            line-height: 1.05;
+            font-size: 10pt;
+            line-height: 1.2;
             color: #000;
-            padding: 3px;
+            padding: 0;
             filter: grayscale(100%);
         }
 
@@ -27,48 +32,48 @@
 
         .section-box {
             border: 2px solid #000;
-            margin-bottom: 2px;
-            padding: 3px;
+            margin-bottom: 6px;
+            padding: 6px;
         }
 
         .section-title {
-            font-size: 8.5pt;
+            font-size: 12pt;
             font-weight: bold;
-            margin-bottom: 2px;
-            padding-bottom: 1px;
+            margin-bottom: 4px;
+            padding-bottom: 2px;
             border-bottom: 1px solid #000;
         }
 
         .info-table td {
-            padding: 2px 3px;
-            font-size: 7pt;
+            padding: 4px 6px;
+            font-size: 10pt;
             border: 1px solid #ccc;
         }
 
         .info-label {
             font-weight: bold;
-            width: 75px;
+            width: 120px;
             background-color: #f0f0f0;
-            font-size: 7pt;
+            font-size: 10pt;
         }
 
         .checklist-table {
-            margin-top: 3px;
+            margin-top: 5px;
         }
 
         .checklist-table th {
             background-color: #333;
             color: #fff;
-            padding: 3px;
-            font-size: 8pt;
+            padding: 5px;
+            font-size: 11pt;
             text-align: center;
             border: 1px solid #000;
         }
 
         .checklist-table td {
-            padding: 2px 3px;
+            padding: 4px 6px;
             border: 1px solid #333;
-            font-size: 7pt;
+            font-size: 10pt;
             text-align: center;
         }
 
@@ -77,102 +82,109 @@
         }
 
         .signature-table {
-            margin-top: 4px;
+            margin-top: 8px;
         }
 
         .signature-table td {
-            padding: 3px;
+            padding: 6px;
             border: 2px solid #000;
         }
 
         .signature-title {
-            font-size: 8pt;
+            font-size: 11pt;
             font-weight: bold;
-            margin-bottom: 2px;
-            padding-bottom: 1px;
+            margin-bottom: 4px;
+            padding-bottom: 2px;
             border-bottom: 1px solid #000;
         }
 
         .signature-line {
-            margin: 2px 0;
-            font-size: 7pt;
+            margin: 4px 0;
+            font-size: 10pt;
         }
 
         .signature-line strong {
             display: inline-block;
-            width: 70px;
+            width: 100px;
         }
 
         .signature-underline {
             display: inline-block;
             border-bottom: 1px solid #000;
-            width: 150px;
-            height: 12px;
+            width: 200px;
+            height: 16px;
         }
         
         .signature-underline-large {
             display: inline-block;
             border-bottom: 1px solid #000;
-            width: 200px;
-            height: 40px;
-        }
-
-        .with-logo-margin {
-            margin-right: 70px;
+            width: 250px;
+            height: 50px;
         }
 
         .footer-text {
             text-align: center;
-            margin-top: 6px;
-            padding-top: 2px;
+            margin-top: 10px;
+            padding-top: 4px;
             border-top: 1px solid #000;
-            font-size: 6pt;
+            font-size: 8.5pt;
         }
     </style>
 </head>
 <body>
-    <!-- Header: Logo, Title, PM Number on same line -->
-    <table style="margin-bottom: 3px; border: none;">
+    <!-- Header: Left Logo, Title Block, Right Customer Logo -->
+    <table style="margin-bottom: 8px; border: none; width: 100%;">
         <tr>
+            <!-- Left: Mitracorp Logo -->
             {{#if Logo_Base64}}
-            <td style="width: 50px; border: none; padding: 0; vertical-align: middle;">
-                <img src="{{Logo_Base64}}" alt="Logo" style="max-height: 40px; max-width: 50px; width: auto; height: auto;">
+            <td style="width: 80px; border: none; padding: 0; padding-right: 8px; vertical-align: middle; text-align: left;">
+                <img src="{{Logo_Base64}}" alt="Logo" style="max-height: 60px; max-width: 80px; width: auto; height: auto;">
             </td>
             {{/if}}
-            <td style="background-color: #333333; border: 2px solid #000; padding: 3px; vertical-align: middle;">
+            
+            <!-- Middle: Black Header Box -->
+            <td style="background-color: #333333; border: 2px solid #000; padding: 6px; vertical-align: middle;">
                 <table style="width: 100%; border: none;">
                     <tr>
+                        <!-- 1. Invisible spacer on the left to perfectly balance the right side -->
+                        <td style="border: none; padding: 0; width: 110px;"></td>
+                        
+                        <!-- 2. The perfectly centered title -->
                         <td style="border: none; padding: 0; text-align: center;">
-                            <span style="color: #ffffff; font-size: 9pt; font-weight: bold;">Preventive Maintenance Report</span><br>
-                            <span style="color: #ffffff; font-size: 6pt;">- Asset Inspection &amp; Maintenance Record -</span>
+                            <span style="color: #ffffff; font-size: 14pt; font-weight: bold;">Preventive Maintenance Report</span><br>
+                            <span style="color: #ffffff; font-size: 10pt;">- Asset Inspection &amp; Maintenance Record -</span>
                         </td>
-                        <td style="border: none; padding: 0; text-align: right; width: 120px;">
+                        
+                        <!-- 3. The PM Number Box -->
+                        <td style="border: none; padding: 0; text-align: right; width: 110px;">
                             {{#if isBlankForm}}
-                            <span style="background-color: #555555; color: #ffffff; padding: 2px 4px; border: 1px solid #ffffff; font-size: 9pt; font-weight: bold;">PM #___</span>
+                            <span style="background-color: #555555; color: #ffffff; padding: 4px 8px; border: 1px solid #ffffff; font-size: 12pt; font-weight: bold;">PM #___</span>
                             {{else}}
-                            <span style="background-color: #555555; color: #ffffff; padding: 2px 4px; border: 1px solid #ffffff; font-size: 9pt; font-weight: bold;">PM #{{PM_Sequence_Number}}</span>
+                            <span style="background-color: #555555; color: #ffffff; padding: 4px 8px; border: 1px solid #ffffff; font-size: 12pt; font-weight: bold;">PM #{{PM_Sequence_Number}}</span>
                             {{/if}}
                         </td>
                     </tr>
                 </table>
             </td>
+
+            <!-- Right: Customer Logo -->
+            {{#if Project_Logo_Base64}}
+            <td style="width: 80px; border: none; padding: 0; padding-left: 8px; vertical-align: middle; text-align: right;">
+                <img src="{{Project_Logo_Base64}}" alt="Customer Logo" style="max-height: 60px; max-width: 80px; width: auto; height: auto;">
+            </td>
+            {{/if}}
         </tr>
     </table>
 
-    <!-- Maintenance & Agency Details with Project Logo -->
-    <div class="section-box" style="position: relative;">
-        {{#if Project_Logo_Base64}}
-        <div style="position: absolute; top: 2px; right: 2px; z-index: 10;">
-            <img src="{{Project_Logo_Base64}}" alt="Project Logo" style="max-height: 60px; max-width: 70px; border: 1px solid #000; padding: 1px; background: white;">
-        </div>
-        {{/if}}
-        <div {{#if Project_Logo_Base64}}class="with-logo-margin"{{/if}}>
-            <div style="display: block; margin-bottom: 2px; padding-bottom: 1px; border-bottom: 1px solid #000;">
+    <!-- Maintenance & Agency Details -->
+    <div class="section-box">
+        <div>
+            <div style="display: block; margin-bottom: 4px; padding-bottom: 2px; border-bottom: 1px solid #000;">
                 <span class="section-title" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">Maintenance &amp; Agency Details</span>
-                <span style="float: right; font-size: 8pt;">
+                <span style="float: right; font-size: 11pt;">
                     <strong>PM Date:</strong> 
                     {{#if isBlankForm}}
-                    <span style="border-bottom: 1px solid #000; display: inline-block; width: 80px; height: 10px;"></span>
+                    <span style="border-bottom: 1px solid #000; display: inline-block; width: 100px; height: 12px;"></span>
                     {{else}}
                     {{PM_Date_Formatted}}
                     {{/if}}
@@ -180,19 +192,19 @@
             </div>
             <table class="info-table" style="width: 100%;">
                 <tr>
-                    <td class="info-label" style="width: 75px;">Recipient:</td>
+                    <td class="info-label">Recipient:</td>
                     <td>{{Recipient_Name_Details}}</td>
                 </tr>
                 <tr>
-                    <td class="info-label" style="width: 75px;">Department:</td>
+                    <td class="info-label">Department:</td>
                     <td>{{Department_Details}}</td>
                 </tr>
                 <tr>
-                    <td class="info-label" style="width: 75px;">Position:</td>
+                    <td class="info-label">Position:</td>
                     <td>{{#if Position}}{{Position}}{{else}}-{{/if}}</td>
                 </tr>
                 <tr>
-                    <td class="info-label" style="width: 75px;">Contract:</td>
+                    <td class="info-label">Contract:</td>
                     <td>{{#if Project_Title}}{{Project_Title}}{{else}}-{{/if}}</td>
                 </tr>
             </table>
@@ -233,10 +245,10 @@
         <table class="checklist-table">
             <thead>
                 <tr>
-                    <th style="width: 30px;">No.</th>
+                    <th style="width: 40px;">No.</th>
                     <th style="width: 40%;">Checklist Item</th>
-                    <th style="width: 40px;">Yes</th>
-                    <th style="width: 40px;">No</th>
+                    <th style="width: 50px;">Yes</th>
+                    <th style="width: 50px;">No</th>
                     <th>Remarks</th>
                 </tr>
             </thead>
@@ -278,14 +290,14 @@
         <div style="padding: 5px;">
             {{#if peripherals}}
             {{#each peripherals}}
-            <div style="margin-bottom: 3px; font-size: 8pt;">
+            <div style="margin-bottom: 4px; font-size: 10pt;">
                 <strong>{{Peripheral_Type_Name}}:</strong> {{Serial_Code}}
             </div>
             {{/each}}
             {{/if}}
-            <div style="margin-top: 5px;">
-                <strong style="font-size: 8pt;">Other Accessories:</strong>
-                <div style="border: 1px solid #000; padding: 4px; min-height: 25px; margin-top: 2px;"></div>
+            <div style="margin-top: 6px;">
+                <strong style="font-size: 10pt;">Other Accessories:</strong>
+                <div style="border: 1px solid #000; padding: 4px; min-height: 30px; margin-top: 4px;"></div>
             </div>
         </div>
     </div>
@@ -295,10 +307,10 @@
         <tr>
             <td style="width: 48%; vertical-align: top;">
                 <div class="signature-title" style="letter-spacing: 0.5px;">Technician Acknowledgment</div>
-                <table style="width: 100%; border: none; margin-top: 3px; border-collapse: collapse;">
+                <table style="width: 100%; border: none; margin-top: 4px; border-collapse: collapse;">
                     <tr>
-                        <td style="width: 70px; vertical-align: top; border: none; padding: 2px 0; font-size: 7pt; font-weight: bold;">Name:</td>
-                        <td style="vertical-align: top; border: none; padding: 2px 0; font-size: 7pt;">
+                        <td style="width: 100px; vertical-align: top; border: none; padding: 4px 0; font-size: 10pt; font-weight: bold;">Name:</td>
+                        <td style="vertical-align: top; border: none; padding: 4px 0; font-size: 10pt;">
                             {{#if isBlankForm}}
                             <span class="signature-underline"></span>
                             {{else}}
@@ -307,18 +319,18 @@
                         </td>
                     </tr>
                     <tr>
-                        <td style="width: 70px; vertical-align: top; border: none; padding: 2px 0; font-size: 7pt; font-weight: bold;">Signature:</td>
-                        <td style="vertical-align: top; border: none; padding: 2px 0; font-size: 7pt;">
+                        <td style="width: 100px; vertical-align: top; border: none; padding: 4px 0; font-size: 10pt; font-weight: bold;">Signature:</td>
+                        <td style="vertical-align: top; border: none; padding: 4px 0; font-size: 10pt;">
                             {{#if Technician_Signature_Base64}}
-                            <img src="{{Technician_Signature_Base64}}" alt="Technician Signature" style="max-width: 150px; max-height: 50px; vertical-align: top;">
+                            <img src="{{Technician_Signature_Base64}}" alt="Technician Signature" style="max-width: 180px; max-height: 60px; vertical-align: top;">
                             {{else}}
                             <span class="signature-underline"></span>
                             {{/if}}
                         </td>
                     </tr>
                     <tr>
-                        <td style="width: 70px; vertical-align: top; border: none; padding: 2px 0; font-size: 7pt; font-weight: bold;">Date:</td>
-                        <td style="vertical-align: top; border: none; padding: 2px 0; font-size: 7pt;">
+                        <td style="width: 100px; vertical-align: top; border: none; padding: 4px 0; font-size: 10pt; font-weight: bold;">Date:</td>
+                        <td style="vertical-align: top; border: none; padding: 4px 0; font-size: 10pt;">
                             {{#if isBlankForm}}
                             <span class="signature-underline"></span>
                             {{else}}
@@ -331,10 +343,10 @@
             <td style="width: 2%; border: none;"></td>
             <td style="width: 48%; vertical-align: top;">
                 <div class="signature-title" style="letter-spacing: 0.5px;">Recipient Acknowledgment</div>
-                <table style="width: 100%; border: none; margin-top: 3px; border-collapse: collapse;">
+                <table style="width: 100%; border: none; margin-top: 4px; border-collapse: collapse;">
                     <tr>
-                        <td style="width: 70px; vertical-align: top; border: none; padding: 2px 0; font-size: 7pt; font-weight: bold;">Name:</td>
-                        <td style="vertical-align: top; border: none; padding: 2px 0; font-size: 7pt;">
+                        <td style="width: 100px; vertical-align: top; border: none; padding: 4px 0; font-size: 10pt; font-weight: bold;">Name:</td>
+                        <td style="vertical-align: top; border: none; padding: 4px 0; font-size: 10pt;">
                             {{#if Is_Marked_Completed}}
                             <span class="signature-underline"></span>
                             {{else}}
@@ -345,14 +357,14 @@
                     {{#unless Is_Marked_Completed}}
                     {{#if BagiPihak_Used}}
                     <tr>
-                        <td style="width: 70px; vertical-align: top; border: none; padding: 0; font-size: 6.5pt; color: #555;">&nbsp;</td>
-                        <td style="vertical-align: top; border: none; padding: 0; font-size: 6.5pt; color: #555; font-style: italic;">Signed on Behalf</td>
+                        <td style="width: 100px; vertical-align: top; border: none; padding: 0; font-size: 9pt; color: #555;">&nbsp;</td>
+                        <td style="vertical-align: top; border: none; padding: 0; font-size: 9pt; color: #555; font-style: italic;">Signed on Behalf</td>
                     </tr>
                     {{/if}}
                     {{/unless}}
                     <tr>
-                        <td style="width: 70px; vertical-align: top; border: none; padding: 2px 0; font-size: 7pt; font-weight: bold;">Department:</td>
-                        <td style="vertical-align: top; border: none; padding: 2px 0; font-size: 7pt;">
+                        <td style="width: 100px; vertical-align: top; border: none; padding: 4px 0; font-size: 10pt; font-weight: bold;">Department:</td>
+                        <td style="vertical-align: top; border: none; padding: 4px 0; font-size: 10pt;">
                             {{#if Is_Marked_Completed}}
                             <span class="signature-underline"></span>
                             {{else}}
@@ -361,10 +373,10 @@
                         </td>
                     </tr>
                     <tr>
-                        <td style="width: 70px; vertical-align: top; border: none; padding: 2px 0; font-size: 7pt; font-weight: bold;">Signature:</td>
-                        <td style="vertical-align: top; border: none; padding: 2px 0; font-size: 7pt;">
+                        <td style="width: 100px; vertical-align: top; border: none; padding: 4px 0; font-size: 10pt; font-weight: bold;">Signature:</td>
+                        <td style="vertical-align: top; border: none; padding: 4px 0; font-size: 10pt;">
                             {{#if Signature_Base64}}
-                            <img src="{{Signature_Base64}}" alt="Signature" style="max-width: 150px; max-height: 50px; vertical-align: top;">
+                            <img src="{{Signature_Base64}}" alt="Signature" style="max-width: 180px; max-height: 60px; vertical-align: top;">
                             {{else}}
                                 {{#if Is_Marked_Completed}}
                                 <span class="signature-underline-large"></span>
@@ -375,8 +387,8 @@
                         </td>
                     </tr>
                     <tr>
-                        <td style="width: 70px; vertical-align: top; border: none; padding: 2px 0; font-size: 7pt; font-weight: bold;">Date:</td>
-                        <td style="vertical-align: top; border: none; padding: 2px 0; font-size: 7pt;">
+                        <td style="width: 100px; vertical-align: top; border: none; padding: 4px 0; font-size: 10pt; font-weight: bold;">Date:</td>
+                        <td style="vertical-align: top; border: none; padding: 4px 0; font-size: 10pt;">
                             {{#if Signed_At_Formatted}}
                             {{Signed_At_Formatted}}
                             {{else}}

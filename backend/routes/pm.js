@@ -3,6 +3,11 @@ const { pool } = require('../config/database');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs'); // Synchronous version for specific checks
+const PMaintenance = require('../models/PMaintenance');
+const pdfGenerator = require('../utils/pdfGenerator');
+const logger = require('../utils/logger');
+
 const {
   getAllPM,
   getPMStatistics,
@@ -29,7 +34,9 @@ const {
   deleteAcknowledgement,
   uploadSignature,
   bulkDeletePM,
-  markAsCompleted
+  markAsCompleted,
+  getPMHistoryForAssets,
+  bulkUploadSignature
 } = require('../controllers/pmController');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -90,11 +97,13 @@ router.get('/results/:pmId', getResultsByPMId);
 router.get('/detail/:pmId', getDetailedPM);
 router.get('/asset/:assetId', getPMByAssetId);
 
+// New route for fetching PM history for multiple assets
+router.post('/bulk-history', authenticateToken, getPMHistoryForAssets);
+
 // DEBUG: Check filename before download (MUST be before /:pmId/report)
 router.get('/:pmId/report-debug', async (req, res) => {
   try {
-    const pmId = parseInt(req.params.pmId);
-    const PMaintenance = require('../models/PMaintenance');
+    const pmId = parseInt(req.params.pmId, 10);
     const pmData = await PMaintenance.getDetailedPM(pmId);
     
     if (!pmData) {
@@ -127,11 +136,6 @@ router.get('/:pmId/report-debug', async (req, res) => {
 router.get('/:pmId/pdf-info', async (req, res) => {
   try {
     const { pmId } = req.params;
-    const pdfGenerator = require('../utils/pdfGenerator');
-    const PMaintenance = require('../models/PMaintenance');
-    const path = require('path');
-    const fs = require('fs');
-    const logger = require('../utils/logger');
 
     // Check if PM exists
     const pmDetail = await PMaintenance.getDetailedPM(pmId);
@@ -148,7 +152,7 @@ router.get('/:pmId/pdf-info', async (req, res) => {
     if (pdfCheck.exists && pdfCheck.filepath) {
       const absolutePath = path.join(__dirname, '../', pdfCheck.filepath);
       
-      if (fs.existsSync(absolutePath)) {
+      if (fsSync.existsSync(absolutePath)) {
         // Use existing PDF
         filepath = pdfCheck.filepath;
         filename = path.basename(filepath);
@@ -188,7 +192,6 @@ router.get('/:pmId/pdf-info', async (req, res) => {
       url: `/${urlPath}`
     });
   } catch (error) {
-    const logger = require('../utils/logger');
     logger.error('Error in pdf-info route:', error);
     res.status(500).json({ 
       error: 'Failed to get PDF info', 
@@ -204,11 +207,6 @@ router.get('/:pmId/report', getPMReport);
 router.get('/:pmId/view-report', async (req, res) => {
   try {
     const { pmId } = req.params;
-    const pdfGenerator = require('../utils/pdfGenerator');
-    const PMaintenance = require('../models/PMaintenance');
-    const path = require('path');
-    const fs = require('fs');
-    const logger = require('../utils/logger');
 
     // Check if PM exists
     const pmDetail = await PMaintenance.getDetailedPM(pmId);
@@ -226,7 +224,7 @@ router.get('/:pmId/view-report', async (req, res) => {
       // Check if file actually exists
       const absolutePath = path.join(__dirname, '../', pdfCheck.filepath);
       
-      if (fs.existsSync(absolutePath)) {
+      if (fsSync.existsSync(absolutePath)) {
         // Use existing PDF
         filepath = pdfCheck.filepath;
         filename = path.basename(filepath);
@@ -258,12 +256,12 @@ router.get('/:pmId/view-report', async (req, res) => {
     const absolutePath = path.join(__dirname, '../', filepath);
 
     // Verify file exists
-    if (!fs.existsSync(absolutePath)) {
+    if (!fsSync.existsSync(absolutePath)) {
       return res.status(404).json({ error: 'PDF file not found' });
     }
 
     // Verify file is not empty
-    const stats = fs.statSync(absolutePath);
+    const stats = fsSync.statSync(absolutePath);
     if (stats.size === 0) {
       return res.status(500).json({ error: 'PDF file is corrupted' });
     }
@@ -281,7 +279,7 @@ router.get('/:pmId/view-report', async (req, res) => {
     res.setHeader('Content-Length', stats.size);
     
     // Stream the file
-    const fileStream = fs.createReadStream(absolutePath);
+    const fileStream = fsSync.createReadStream(absolutePath);
     fileStream.pipe(res);
     
     fileStream.on('error', (err) => {
@@ -291,7 +289,6 @@ router.get('/:pmId/view-report', async (req, res) => {
       }
     });
   } catch (error) {
-    const logger = require('../utils/logger');
     logger.error('Error in view-report route:', error);
     res.status(500).json({ error: 'Failed to retrieve PM report', message: error.message });
   }
@@ -340,6 +337,7 @@ router.post('/', authenticateToken, createPM);
 router.post('/:pmId/upload-acknowledgement', uploadAcknowledgement);
 router.delete('/:pmId/delete-acknowledgement', deleteAcknowledgement);
 router.post('/:pmId/signature', uploadSignature);
+router.post('/bulk-signature', authenticateToken, bulkUploadSignature);
 router.put('/:pmId/mark-completed', markAsCompleted);
 router.delete('/:pmId', deletePM);
 

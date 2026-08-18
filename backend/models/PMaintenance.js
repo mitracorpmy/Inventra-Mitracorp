@@ -5,7 +5,51 @@ class PMaintenance {
     this.PM_ID = data.PM_ID;
     this.Asset_ID = data.Asset_ID;
     this.PM_Date = data.PM_Date;
-    this.Remarks = data.Remarks;
+    this.Remarks = data.Remarks;const { pool } = require('../config/database');
+    const PDFGenerator = require('../utils/pdfGenerator');
+    
+    class PMaintenance {
+      // ... (all your existing static methods like findAll, getStatistics, etc.)
+    
+      /**
+       * Find all PM records for a given list of asset IDs
+       * and calculate their sequence number.
+       */
+      static async findPMHistoryByAssetIds(assetIds) {
+        if (!assetIds || assetIds.length === 0) {
+          return [];
+        }
+    
+        try {
+          const placeholders = assetIds.map(() => '?').join(',');
+          
+          // This complex query uses window functions to calculate the PM sequence number for each asset efficiently
+          const query = `
+            SELECT 
+              PM_ID,
+              Asset_ID,
+              PM_Date,
+              Status,
+              ROW_NUMBER() OVER(PARTITION BY Asset_ID ORDER BY PM_Date ASC, PM_ID ASC) as pmSequence
+            FROM 
+              PMAINTENANCE
+            WHERE 
+              Asset_ID IN (${placeholders})
+            ORDER BY 
+              Asset_ID, PM_Date ASC, PM_ID ASC;
+          `;
+    
+          const [rows] = await pool.execute(query, assetIds);
+          return rows;
+        } catch (error) {
+          console.error('Error in findPMHistoryByAssetIds:', error);
+          throw error;
+        }
+      }
+    }
+    
+    module.exports = PMaintenance;
+    
     this.Status = data.Status;
   }
 
