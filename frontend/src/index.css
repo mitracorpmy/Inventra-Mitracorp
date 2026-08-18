@@ -206,20 +206,24 @@ body {
   margin: 0;
 }
 
+/* Sidebar Logout Button */
 .logout-btn {
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
-  color: white;
+  background-color: #ef5350 !important; /* Soft Red */
+  color: #ffffff !important;
+  border-radius: 6px !important;
+  margin: 0 10px 10px 10px !important; /* Gives it breathing room */
+  transition: all 0.3s ease !important;
   border: none;
-  padding: 10px 20px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s ease;
 }
 
 .logout-btn:hover {
-  background: linear-gradient(135deg, #c0392b, #a93226);
+  background-color: #b71c1c !important; /* Dark Red */
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(183, 28, 28, 0.3);
+}
+
+.logout-btn svg {
+  color: #ffffff !important; /* Keeps the icon white */
 }
 
 .btn {
@@ -494,23 +498,54 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #87ceeb, #4682b4);
+  /* The linear-gradient has been removed so the image from Login.js can shine! */
 }
 
 .login-card {
-  background: white;
+  /* Swapped solid white to 90% white for a modern frosted glass effect */
+  background: #ffffff;
   padding: 40px;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  border-radius: 12px;
+  /* Made the shadow slightly deeper to separate it from the busy image */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   width: 100%;
   max-width: 400px;
+  
+  /* Blurs the server room image exactly where the card sits */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+/* Style for the Login Button */
+.login-card .btn-primary {
+  background-color: #71c55d; /* Soft Green */
+  border-color: #71c55d;
+  color: white;
+  transition: all 0.3s ease; /* Makes the color change smooth */
+}
+
+/* Hover state for the Login Button */
+.login-card .btn-primary:hover:not(:disabled) {
+  background-color: #228b22; /* Forest Green */
+  border-color: #228b22;
+  box-shadow: 0 4px 12px rgba(34, 139, 34, 0.4); /* Optional: Adds a nice green glowing shadow on hover */
+}
+
+/* Disabled state (when the user clicks and it says "Logging in...") */
+.login-card .btn-primary:disabled {
+  background-color: #a8d59d; /* Even softer, faded green */
+  border-color: #a8d59d;
+  cursor: not-allowed;
 }
 
 .login-title {
   text-align: center;
   margin-bottom: 30px;
-  color: #4682b4;
+  /* Darkened the text slightly so it pops against the glass background */
+  color: #1e3a8a; 
   font-size: 1.8rem;
+  font-weight: bold;
 }
 
 /* Status badges */
@@ -2325,4 +2360,26 @@ input[type="checkbox"] {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* Bulletproof Sidebar Logout Button */
+.sidebar-bottom-nav button.logout-item {
+  background-color: #ef5350 !important; /* Soft Red */
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  margin: 10px 15px !important; 
+  width: calc(100% - 30px) !important; /* Keeps it perfectly inside the sidebar */
+  transition: all 0.3s ease !important;
+  border: none !important;
+}
+
+.sidebar-bottom-nav button.logout-item:hover {
+  background-color: #b71c1c !important; /* Dark Red */
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(183, 28, 28, 0.4) !important;
+}
+
+.sidebar-bottom-nav button.logout-item svg,
+.sidebar-bottom-nav button.logout-item span {
+  color: #ffffff !important; /* Forces the icon and text to stay white */
 }

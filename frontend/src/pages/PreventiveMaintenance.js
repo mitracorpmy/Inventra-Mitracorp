@@ -1,136 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import usePageTitle from '../hooks/usePageTitle';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Calendar, Clock, CheckCircle, AlertTriangle, Wrench, Filter, Building2, MapPin, Package, FileText, X, ClipboardCheck, Edit, Trash2, Plus, Save, Search, Download, ChevronRight, ChevronLeft, Copy, ArrowLeft, GripVertical, Hammer, FileUp, Lock, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, AlertTriangle, Wrench, Filter, Building2, MapPin, Package, FileText, X, ClipboardCheck, Edit, Trash2, Plus, Save, Search, Download, ChevronRight, ChevronLeft, Copy, ArrowLeft, GripVertical, Hammer, FileUp, Lock, AlertCircle, PenTool } from 'lucide-react';
 import { API_URL } from '../config/api';
+import SearchableDropdown from '../components/SearchableDropdown';
 import Pagination from '../components/Pagination';
 import toast from '../utils/toast';
-
-// Reusable searchable dropdown component with inline search at top
-const SearchableDropdown = ({
-  value,
-  onChangeEvent,
-  options,
-  getOptionValue,
-  renderOption,
-  disabled,
-  placeholder = '-- Select --',
-  searchPlaceholder = 'Type to search...'
-}) => {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    const handleDocClick = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleDocClick);
-    return () => document.removeEventListener('mousedown', handleDocClick);
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((opt) => renderOption(opt).toLowerCase().includes(q));
-  }, [options, query, renderOption]);
-
-  const selectedLabel = useMemo(() => {
-    const found = options.find((opt) => String(getOptionValue(opt)) === String(value));
-    return found ? renderOption(found) : placeholder;
-  }, [options, value, getOptionValue, renderOption, placeholder]);
-
-  const handleSelect = (opt) => {
-    const newVal = getOptionValue(opt);
-    onChangeEvent({ target: { value: newVal } });
-    setOpen(false);
-  };
-
-  return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        onClick={() => !disabled && setOpen((prev) => !prev)}
-        disabled={disabled}
-        style={{
-          width: '100%',
-          textAlign: 'left',
-          padding: '12px',
-          border: value ? '2px solid #000' : '2px solid #ddd',
-          borderRadius: '6px',
-          fontSize: '1rem',
-          backgroundColor: disabled ? '#f5f5f5' : 'white',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-        }}
-      >
-        <span style={{ color: selectedLabel === placeholder ? '#7f8c8d' : '#2c3e50' }}>{selectedLabel}</span>
-        <span style={{ float: 'right', color: '#7f8c8d' }}>▾</span>
-      </button>
-
-      {open && (
-        <div
-          style={{
-            position: 'absolute',
-            zIndex: 9999,
-            top: '48px',
-            left: 0,
-            right: 0,
-            background: 'white',
-            border: '1px solid #ddd',
-            borderRadius: '6px',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
-          }}
-        >
-          <div style={{ padding: '8px' }}>
-            <input
-              autoFocus
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={searchPlaceholder}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '0.95rem'
-              }}
-            />
-          </div>
-          <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
-            {filtered.length === 0 ? (
-              <div style={{ padding: '10px', color: '#7f8c8d', fontStyle: 'italic' }}>No matches</div>
-            ) : (
-              filtered.map((opt, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleSelect(opt)}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: '10px 12px',
-                    border: 'none',
-                    borderTop: '1px solid #f0f0f0',
-                    background: 'white',
-                    cursor: 'pointer'
-                  }}
-                  onMouseOver={(e) => (e.currentTarget.style.background = '#f5f7fa')}
-                  onMouseOut={(e) => (e.currentTarget.style.background = 'white')}
-                >
-                  {renderOption(opt)}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+import BulkPMDownloadModal from '../components/BulkPMDownloadModal';
+import BulkSignatureModal from '../components/BulkSignatureModal';
 
 const PreventiveMaintenance = () => {
   usePageTitle('Preventive Maintenance');
@@ -263,6 +140,7 @@ const PreventiveMaintenance = () => {
 
   // Bulk Download Modal States
   const [showBulkDownloadModal, setShowBulkDownloadModal] = useState(false);
+  const [showBulkSignatureModal, setShowBulkSignatureModal] = useState(false);
   const [bulkDownloadSearch, setBulkDownloadSearch] = useState('');
   const [selectedAssets, setSelectedAssets] = useState([]); // Assets selected (left box)
   const [selectedPMRecords, setSelectedPMRecords] = useState({}); // PM records selected per asset {assetId: [pmId1, pmId2]}
@@ -1245,6 +1123,8 @@ const PreventiveMaintenance = () => {
     setShowConfirmDialog(true);
   };
 
+
+
   // Delete Mode Handlers
   const handleOpenDeleteMode = () => {
     setShowDeleteConfirmation(true);
@@ -1442,6 +1322,48 @@ const PreventiveMaintenance = () => {
     }
   };
 
+  // --- NEW: Extract and format the exact assets visible in the table for the modals ---
+  const finalFilteredAssets = useMemo(() => {
+    const allRecords = [];
+    Object.keys(groupedByCategory).forEach((category) => {
+      const { assets = {} } = groupedByCategory[category] || {};
+      Object.values(assets).forEach(asset => {
+        allRecords.push({ ...asset, categoryName: category });
+      });
+    });
+    
+    // Apply Category Filter
+    let filteredRecords = selectedCategoryFilter === 'all'
+      ? allRecords
+      : allRecords.filter(r => r.categoryName === selectedCategoryFilter);
+    
+    // Apply "Only Show Assets with PM" toggle
+    if (showOnlyWithPM) {
+      filteredRecords = filteredRecords.filter(r => r.pmCount > 0);
+    }
+    
+    // Apply Individual Column Filters
+    return filteredRecords.filter(record => {
+      for (const columnKey in columnFilters) {
+        if (!columnFilters[columnKey]) continue;
+        const filterValue = columnFilters[columnKey].toLowerCase();
+        
+        if (columnKey === 'category' && !(record.categoryName || '').toLowerCase().includes(filterValue)) return false;
+        if (columnKey === 'tagId' && !(record.Asset_Tag_ID || '').toLowerCase().includes(filterValue)) return false;
+        if (columnKey === 'itemName' && !(record.Item_Name || '').toLowerCase().includes(filterValue)) return false;
+        if (columnKey === 'serialNumber' && !(record.Asset_Serial_Number || '').toLowerCase().includes(filterValue)) return false;
+        if (columnKey === 'latestPMDate') {
+          if (!record.latestPMDate) return false;
+          const date = new Date(record.latestPMDate);
+          const recordDate = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+          if (recordDate !== columnFilters[columnKey]) return false;
+        }
+      }
+      return true;
+    });
+  }, [groupedByCategory, selectedCategoryFilter, showOnlyWithPM, columnFilters]);
+  // ------------------------------------------------------------------------------------
+
   return (
     <div style={{ padding: '0' }}>
       <div style={{
@@ -1564,9 +1486,10 @@ const PreventiveMaintenance = () => {
             </label>
             <SearchableDropdown
               value={selectedCustomer}
-              onChangeEvent={handleCustomerChange}
+              onChange={(value) => handleCustomerChange({ target: { value } })}
               options={customers}
               getOptionValue={(c) => c.Customer_ID}
+              getOptionLabel={(c) => c.Customer_Name}
               renderOption={(c) => {
                 const pmCount = customerPMCounts[c.Customer_ID] || 0;
                 return `${c.Customer_Name} (${c.Customer_Ref_Number}) - ${pmCount} PM record${pmCount !== 1 ? 's' : ''}`;
@@ -1589,9 +1512,10 @@ const PreventiveMaintenance = () => {
             </label>
             <SearchableDropdown
               value={selectedBranch}
-              onChangeEvent={handleBranchChange}
+              onChange={(value) => handleBranchChange({ target: { value } })}
               options={branches}
               getOptionValue={(b) => b}
+              getOptionLabel={(b) => b}
               renderOption={(b) => {
                 const pmCount = branchPMCounts[b] || 0;
                 return `${b} - ${pmCount} PM record${pmCount !== 1 ? 's' : ''}`;
@@ -1718,6 +1642,43 @@ const PreventiveMaintenance = () => {
             >
               <Download size={18} />
               Download Form
+            </button>
+
+            {/* Bulk Sign Button */}
+            <button
+              onClick={() => setShowBulkSignatureModal(true)}
+              disabled={deleteMode || isCustomerRole()}
+              style={{
+                padding: '14px 24px',
+                background: '#8e44ad', // Purple to make it stand out
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: deleteMode || isCustomerRole() ? 'not-allowed' : 'pointer',
+                fontSize: '1rem',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                opacity: deleteMode || isCustomerRole() ? 0.5 : 1,
+                pointerEvents: deleteMode || isCustomerRole() ? 'none' : 'auto'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = '#9b59b6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = '#8e44ad';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+              }}
+            >
+              <PenTool size={18} />
+              Bulk Sign
             </button>
 
             {/* Delete PM Records Button */}
@@ -4887,590 +4848,25 @@ const PreventiveMaintenance = () => {
       )}
 
       {/* Bulk Download Modal */}
-      {showBulkDownloadModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1003,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            width: '95%',
-            maxWidth: '1400px',
-            maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
-          }}>
-            {/* Header */}
-            <div style={{
-              padding: '24px 28px',
-              borderBottom: '2px solid #e0e0e0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Download size={28} color="#27ae60" />
-                <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#2c3e50' }}>
-                  Download Bulk PM Forms
-                </h2>
-              </div>
-              <button
-                onClick={() => {
-                  setShowBulkDownloadModal(false);
-                  setSelectedAssets([]);
-                  setSelectedPMRecords({});
-                  setBulkDownloadSearch('');
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'background 0.2s'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.background = '#f5f5f5'}
-                onMouseOut={(e) => e.currentTarget.style.background = 'none'}
-              >
-                <X size={24} color="#666" />
-              </button>
-            </div>
+      <BulkPMDownloadModal 
+        isOpen={showBulkDownloadModal} 
+        onClose={() => setShowBulkDownloadModal(false)} 
+        selectedAssets={finalFilteredAssets}
+      />
 
-            {/* Search Bar */}
-            <div style={{ padding: '20px 28px', borderBottom: '1px solid #e0e0e0' }}>
-              <div style={{ position: 'relative' }}>
-                <Search 
-                  size={18} 
-                  style={{ 
-                    position: 'absolute', 
-                    left: '14px', 
-                    top: '50%', 
-                    transform: 'translateY(-50%)',
-                    color: '#7f8c8d'
-                  }} 
-                />
-                <input
-                  type="text"
-                  placeholder="Search assets by Tag ID, Item Name, Serial Number..."
-                  value={bulkDownloadSearch}
-                  onChange={(e) => setBulkDownloadSearch(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px 12px 44px',
-                    border: '2px solid #ddd',
-                    borderRadius: '8px',
-                    fontSize: '0.95rem',
-                    outline: 'none',
-                    transition: 'border-color 0.2s'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                  onBlur={(e) => e.target.style.borderColor = '#ddd'}
-                />
-              </div>
-            </div>
-
-            {/* Two Boxes Container */}
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              gap: '20px',
-              padding: '20px 28px',
-              overflow: 'hidden'
-            }}>
-              {/* Left Box - Available Assets */}
-              <div style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                border: '2px solid #3498db',
-                borderRadius: '8px',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  padding: '16px',
-                  background: 'linear-gradient(135deg, #3498db, #2980b9)',
-                  color: 'white',
-                  fontWeight: '600',
-                  fontSize: '1rem'
-                }}>
-                  Available Assets ({(() => {
-                    const allAssets = Object.values(groupedByCategory).flatMap(cat => 
-                      Object.values(cat.assets)
-                    );
-                    const filtered = allAssets.filter(asset => {
-                      if (!bulkDownloadSearch) return true;
-                      const query = bulkDownloadSearch.toLowerCase();
-                      return (
-                        asset.Asset_Tag_ID?.toLowerCase().includes(query) ||
-                        asset.Item_Name?.toLowerCase().includes(query) ||
-                        asset.Asset_Serial_Number?.toLowerCase().includes(query)
-                      );
-                    });
-                    return filtered.length;
-                  })()})
-                </div>
-                <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-                  {(() => {
-                    const allAssets = Object.values(groupedByCategory).flatMap(cat => 
-                      Object.values(cat.assets)
-                    );
-                    const filteredAssets = allAssets.filter(asset => {
-                      if (!bulkDownloadSearch) return true;
-                      const query = bulkDownloadSearch.toLowerCase();
-                      return (
-                        asset.Asset_Tag_ID?.toLowerCase().includes(query) ||
-                        asset.Item_Name?.toLowerCase().includes(query) ||
-                        asset.Asset_Serial_Number?.toLowerCase().includes(query)
-                      );
-                    });
-
-                    if (filteredAssets.length === 0) {
-                      return (
-                        <div style={{
-                          padding: '40px 20px',
-                          textAlign: 'center',
-                          color: '#999'
-                        }}>
-                          <Package size={48} color="#ddd" style={{ marginBottom: '12px' }} />
-                          <p>No assets found</p>
-                        </div>
-                      );
-                    }
-
-                    return filteredAssets.map(asset => {
-                      const isSelected = selectedAssets.some(a => a.Asset_ID === asset.Asset_ID);
-                      return (
-                        <div
-                          key={asset.Asset_ID}
-                          style={{
-                            padding: '14px 16px',
-                            marginBottom: '8px',
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px',
-                            cursor: 'pointer',
-                            background: isSelected ? '#e8f5e9' : 'white',
-                            transition: 'all 0.2s',
-                            minHeight: '70px'
-                          }}
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedAssets(selectedAssets.filter(a => a.Asset_ID !== asset.Asset_ID));
-                              // Remove PM selections for this asset
-                              const newPMRecords = { ...selectedPMRecords };
-                              delete newPMRecords[asset.Asset_ID];
-                              setSelectedPMRecords(newPMRecords);
-                            } else {
-                              setSelectedAssets([...selectedAssets, asset]);
-                            }
-                          }}
-                          onMouseOver={(e) => {
-                            if (!isSelected) e.currentTarget.style.background = '#f5f5f5';
-                          }}
-                          onMouseOut={(e) => {
-                            if (!isSelected) e.currentTarget.style.background = 'white';
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            readOnly
-                            style={{
-                              width: '18px',
-                              height: '18px',
-                              cursor: 'pointer',
-                              flexShrink: 0
-                            }}
-                          />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                              <div style={{ fontWeight: '600', color: '#2c3e50', fontSize: '0.95rem' }}>
-                                {asset.Asset_Tag_ID}
-                              </div>
-                              <div style={{ fontSize: '0.75rem', color: '#999', fontFamily: 'monospace' }}>
-                                {asset.Asset_Serial_Number || 'N/A'}
-                              </div>
-                            </div>
-                            <div style={{ fontSize: '0.85rem', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {asset.Item_Name}
-                            </div>
-                          </div>
-                          {isSelected && <ChevronRight size={20} color="#27ae60" style={{ flexShrink: 0 }} />}
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
-
-              {/* Right Box - Selected Assets with PM Records */}
-              <div style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                border: '2px solid #27ae60',
-                borderRadius: '8px',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  padding: '16px',
-                  background: 'linear-gradient(135deg, #27ae60, #229954)',
-                  color: 'white',
-                  fontWeight: '600',
-                  fontSize: '1rem'
-                }}>
-                  Selected Assets ({selectedAssets.length})
-                </div>
-                <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-                  {selectedAssets.length === 0 ? (
-                    <div style={{
-                      padding: '40px 20px',
-                      textAlign: 'center',
-                      color: '#999'
-                    }}>
-                      <ChevronLeft size={48} color="#ddd" style={{ marginBottom: '12px' }} />
-                      <p>Select assets from the left to add PM records</p>
-                    </div>
-                  ) : (
-                    selectedAssets.map(asset => {
-                      const assetPMRecords = asset.allPMRecords || [];
-                      const selectedPMs = selectedPMRecords[asset.Asset_ID] || [];
-                      
-                      return (
-                        <div
-                          key={asset.Asset_ID}
-                          style={{
-                            marginBottom: '8px',
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '6px',
-                            overflow: 'hidden'
-                          }}
-                        >
-                          {/* Asset Row with PM Selection Inline */}
-                          <div style={{
-                            padding: '14px 16px',
-                            background: '#f8f9fa',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '16px',
-                            justifyContent: 'space-between',
-                            minHeight: '70px'
-                          }}>
-                            {/* Asset Info */}
-                            <div style={{ flex: '0 0 auto', minWidth: '180px', maxWidth: '180px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                                <div style={{ fontWeight: '600', color: '#2c3e50', fontSize: '0.95rem' }}>
-                                  {asset.Asset_Tag_ID}
-                                </div>
-                                <div style={{ fontSize: '0.75rem', color: '#999', fontFamily: 'monospace' }}>
-                                  {asset.Asset_Serial_Number || 'N/A'}
-                                </div>
-                              </div>
-                              <div style={{ fontSize: '0.85rem', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {asset.Item_Name}
-                              </div>
-                            </div>
-
-                            {/* PM Records Selection - Horizontal in same row */}
-                            <div style={{
-                              flex: 1,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              flexWrap: 'wrap'
-                            }}>
-                              <span style={{
-                                fontSize: '0.85rem',
-                                color: '#666',
-                                fontWeight: '600',
-                                marginRight: '4px'
-                              }}>
-                                Forms:
-                              </span>
-                              {/* Blank Form Option */}
-                              <div
-                                style={{
-                                  padding: '6px 12px',
-                                  border: selectedPMs.includes('BLANK') ? '2px solid #9b59b6' : '1px solid #ddd',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  background: selectedPMs.includes('BLANK') ? '#f4ecf7' : 'white',
-                                  transition: 'all 0.2s',
-                                  fontSize: '0.85rem',
-                                  fontWeight: selectedPMs.includes('BLANK') ? '600' : '500',
-                                  color: selectedPMs.includes('BLANK') ? '#2c3e50' : '#666',
-                                  whiteSpace: 'nowrap',
-                                  boxShadow: selectedPMs.includes('BLANK') ? '0 2px 4px rgba(155, 89, 182, 0.2)' : 'none'
-                                }}
-                                onClick={() => {
-                                  const currentPMs = selectedPMRecords[asset.Asset_ID] || [];
-                                  if (currentPMs.includes('BLANK')) {
-                                    setSelectedPMRecords({
-                                      ...selectedPMRecords,
-                                      [asset.Asset_ID]: currentPMs.filter(id => id !== 'BLANK')
-                                    });
-                                  } else {
-                                    setSelectedPMRecords({
-                                      ...selectedPMRecords,
-                                      [asset.Asset_ID]: [...currentPMs, 'BLANK']
-                                    });
-                                  }
-                                }}
-                                onMouseOver={(e) => {
-                                  if (!selectedPMs.includes('BLANK')) {
-                                    e.currentTarget.style.background = '#f0f0f0';
-                                    e.currentTarget.style.borderColor = '#9b59b6';
-                                  }
-                                }}
-                                onMouseOut={(e) => {
-                                  if (!selectedPMs.includes('BLANK')) {
-                                    e.currentTarget.style.background = 'white';
-                                    e.currentTarget.style.borderColor = '#ddd';
-                                  }
-                                }}
-                                title="Blank PM Form (empty template)"
-                              >
-                                {selectedPMs.includes('BLANK') && <span style={{ marginRight: '4px', color: '#27ae60' }}>✓</span>}
-                                Blank
-                              </div>
-                              
-                              {/* Existing PM Records */}
-                              {assetPMRecords.length > 0 && assetPMRecords.map((pm, index) => {
-                                  const isPMSelected = selectedPMs.includes(pm.PM_ID);
-                                  const isDisabled = pm.Status === 'In-Process'; // Only In-Process is disabled, Marked as Completed allowed
-                                  return (
-                                    <div
-                                      key={pm.PM_ID}
-                                      style={{
-                                        padding: '6px 12px',
-                                        border: isPMSelected ? '2px solid #3498db' : '1px solid #ddd',
-                                        borderRadius: '6px',
-                                        cursor: isDisabled ? 'not-allowed' : 'pointer',
-                                        background: isDisabled ? '#f5f5f5' : (isPMSelected ? '#e3f2fd' : 'white'),
-                                        transition: 'all 0.2s',
-                                        fontSize: '0.85rem',
-                                        fontWeight: isPMSelected ? '600' : '500',
-                                        color: isDisabled ? '#bdc3c7' : (isPMSelected ? '#2c3e50' : '#666'),
-                                        whiteSpace: 'nowrap',
-                                        boxShadow: isPMSelected ? '0 2px 4px rgba(52, 152, 219, 0.2)' : 'none',
-                                        opacity: isDisabled ? 0.5 : 1,
-                                        position: 'relative'
-                                      }}
-                                      onClick={() => {
-                                        if (isDisabled) return;
-                                        const currentPMs = selectedPMRecords[asset.Asset_ID] || [];
-                                        if (isPMSelected) {
-                                          setSelectedPMRecords({
-                                            ...selectedPMRecords,
-                                            [asset.Asset_ID]: currentPMs.filter(id => id !== pm.PM_ID)
-                                          });
-                                        } else {
-                                          setSelectedPMRecords({
-                                            ...selectedPMRecords,
-                                            [asset.Asset_ID]: [...currentPMs, pm.PM_ID]
-                                          });
-                                        }
-                                      }}
-                                      onMouseOver={(e) => {
-                                        if (!isPMSelected && !isDisabled) {
-                                          e.currentTarget.style.background = '#f0f0f0';
-                                          e.currentTarget.style.borderColor = '#3498db';
-                                        }
-                                      }}
-                                      onMouseOut={(e) => {
-                                        if (!isPMSelected && !isDisabled) {
-                                          e.currentTarget.style.background = 'white';
-                                          e.currentTarget.style.borderColor = '#ddd';
-                                        }
-                                      }}
-                                      title={isDisabled ? `Cannot download - Status: In-Process (requires signature)` : `PM Date: ${formatDate(pm.PM_Date)} - Status: ${pm.Status || 'Completed'}`}
-                                    >
-                                      {isPMSelected && <span style={{ marginRight: '4px', color: '#27ae60' }}>✓</span>}
-                                      {isDisabled && <span style={{ marginRight: '4px', color: '#e74c3c' }}>🔒</span>}
-                                      {index + 1}
-                                    </div>
-                                  );
-                                })}
-                            </div>
-
-                            {/* Remove Button */}
-                            <button
-                              onClick={() => {
-                                setSelectedAssets(selectedAssets.filter(a => a.Asset_ID !== asset.Asset_ID));
-                                const newPMRecords = { ...selectedPMRecords };
-                                delete newPMRecords[asset.Asset_ID];
-                                setSelectedPMRecords(newPMRecords);
-                              }}
-                              style={{
-                                background: '#e74c3c',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '6px 12px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem',
-                                fontWeight: '600',
-                                transition: 'background 0.2s',
-                                whiteSpace: 'nowrap'
-                              }}
-                              onMouseOver={(e) => e.currentTarget.style.background = '#c0392b'}
-                              onMouseOut={(e) => e.currentTarget.style.background = '#e74c3c'}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer with Download Button */}
-            <div style={{
-              padding: '20px 28px',
-              borderTop: '2px solid #e0e0e0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div style={{ color: '#666', fontSize: '0.95rem' }}>
-                {(() => {
-                  const totalSelected = Object.values(selectedPMRecords).reduce((sum, pms) => sum + pms.length, 0);
-                  return (
-                    <>
-                      <strong>{selectedAssets.length}</strong> asset{selectedAssets.length !== 1 ? 's' : ''} selected, 
-                      <strong> {totalSelected}</strong> PM record{totalSelected !== 1 ? 's' : ''} to download
-                    </>
-                  );
-                })()}
-              </div>
-              <button
-                onClick={async () => {
-                  // TODO: Implement PDF download
-                  const totalSelected = Object.values(selectedPMRecords).reduce((sum, pms) => sum + pms.length, 0);
-                  if (totalSelected === 0) {
-                    toast.error('Please select at least one PM record to download');
-                    return;
-                  }
-                  
-                  setDownloadingPDF(true);
-                  try {
-                    // Get customer and branch names
-                    const customerName = customers.find(c => c.Customer_ID == selectedCustomer)?.Customer_Name || 'Customer';
-                    const branchName = selectedBranch;
-                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                    const filename = `${customerName}_${branchName}_${timestamp}.pdf`;
-                    
-                    // Separate PM IDs and blank forms
-                    const allSelections = Object.entries(selectedPMRecords);
-                    const pmIds = [];
-                    const blankAssetIds = [];
-                    
-                    allSelections.forEach(([assetId, selections]) => {
-                      selections.forEach(selection => {
-                        if (selection === 'BLANK') {
-                          blankAssetIds.push(parseInt(assetId));
-                        } else {
-                          pmIds.push(selection);
-                        }
-                      });
-                    });
-                    
-                    // Call backend API to generate PDF
-                    const token = localStorage.getItem('authToken');
-                    const response = await fetch(`${API_URL}/pm/bulk-download`, {
-                      method: 'POST',
-                      headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({ pmIds, blankAssetIds })
-                    });
-
-                    if (!response.ok) {
-                      const errorData = await response.json().catch(() => ({}));
-                      const errorMessage = errorData.message || errorData.error || 'Failed to generate PDF';
-                      throw new Error(errorMessage);
-                    }
-
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                    
-                    // Close modal and reset
-                    setShowBulkDownloadModal(false);
-                    setSelectedAssets([]);
-                    setSelectedPMRecords({});
-                    setBulkDownloadSearch('');
-                  } catch (error) {
-                    console.error('Error downloading PDF:', error);
-                    toast.error(`Failed to download PDF: ${error.message}`);
-                  } finally {
-                    setDownloadingPDF(false);
-                  }
-                }}
-                disabled={downloadingPDF || Object.values(selectedPMRecords).reduce((sum, pms) => sum + pms.length, 0) === 0}
-                style={{
-                  padding: '14px 32px',
-                  background: downloadingPDF ? '#95a5a6' : '#27ae60',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: downloadingPDF ? 'not-allowed' : 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}
-                onMouseOver={(e) => {
-                  if (!downloadingPDF && Object.values(selectedPMRecords).reduce((sum, pms) => sum + pms.length, 0) > 0) {
-                    e.currentTarget.style.background = '#229954';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-                  }
-                }}
-                onMouseOut={(e) => {
-                  if (!downloadingPDF) {
-                    e.currentTarget.style.background = '#27ae60';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                  }
-                }}
-              >
-                <Download size={18} />
-                {downloadingPDF ? 'Generating PDF...' : 'Download PDF'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Bulk Signature Modal */}
+      <BulkSignatureModal 
+        isOpen={showBulkSignatureModal} 
+        onClose={() => setShowBulkSignatureModal(false)} 
+        selectedAssets={filteredPmRecords}
+        onSuccess={() => {
+          // Refresh the data so the UI updates to show them as Signed/Completed
+          fetchStatistics();
+          if (selectedCustomer && selectedBranch) {
+            fetchPMRecords(selectedCustomer, selectedBranch);
+          }
+        }}
+      />
 
       {/* Rearrange Confirmation Dialog */}
       {showRearrangeConfirm && (

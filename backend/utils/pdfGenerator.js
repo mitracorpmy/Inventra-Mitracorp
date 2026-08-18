@@ -5,6 +5,7 @@ const fsSync = require('fs');
 const path = require('path');
 const PMaintenance = require('../models/PMaintenance');
 const { pool } = require('../config/database');
+const { PDFDocument } = require('pdf-lib');
 
 class PDFGenerator {
     constructor() {
@@ -60,31 +61,35 @@ class PDFGenerator {
     }
 
     /**
-     * Convert project logo to base64 for embedding in PDF
-     * @param {string} logoPath - The file path from PROJECT.file_path_logo
-     * @returns {string} - Base64 encoded project logo or empty string if not found
+     * Convert project logo to base64 for embedding in PDF (with smart fallback)
      */
-    getProjectLogoBase64(logoPath) {
+    getProjectLogoBase64(logoPath, customerName) {
         try {
-            if (!logoPath) {
-                console.log('⚠️  No project logo path provided');
+            let fullPath = null;
+
+            // 1. Try the database path first
+            if (logoPath) {
+                fullPath = path.join(__dirname, '..', logoPath);
+            } 
+            // 2. SMART FALLBACK: If DB is null, try matching the Customer Name!
+            else if (customerName) {
+                console.log(`⚠️ DB path null. Attempting smart fallback using Customer Name: ${customerName}`);
+                // Safely format the customer name just in case (e.g. "ILIM" -> "ILIM.png")
+                const safeCustomerName = customerName.replace(/[^a-zA-Z0-9 -]/g, '').trim();
+                fullPath = path.join(__dirname, '..', 'uploads', 'project-logo', `${safeCustomerName}.png`);
+            } else {
+                console.log('⚠️ No project logo path or customer name provided');
                 return '';
             }
             
-            // The logoPath from database is like: uploads/project-logo/ILIM.png
-            // We need to construct the full path from backend directory
-            const fullPath = path.join(__dirname, '..', logoPath);
-            
             console.log('🔍 Looking for project logo at:', fullPath);
-            console.log('🔍 __dirname is:', __dirname);
-            console.log('🔍 Constructed path:', path.join(__dirname, '..'));
             
             if (fsSync.existsSync(fullPath)) {
                 const logoBuffer = fsSync.readFileSync(fullPath);
                 const logoBase64 = logoBuffer.toString('base64');
                 
                 // Detect image type from file extension
-                const ext = path.extname(logoPath).toLowerCase();
+                const ext = path.extname(fullPath).toLowerCase();
                 let mimeType = 'image/png';
                 if (ext === '.jpg' || ext === '.jpeg') {
                     mimeType = 'image/jpeg';
@@ -96,26 +101,9 @@ class PDFGenerator {
                 
                 const dataUri = `data:${mimeType};base64,${logoBase64}`;
                 console.log('✅ Project logo loaded successfully');
-                console.log('✅ Logo data URI length:', dataUri.length);
-                console.log('✅ First 100 chars of data URI:', dataUri.substring(0, 100));
                 return dataUri;
             } else {
                 console.warn('❌ Project logo file not found at:', fullPath);
-                console.warn('📂 Current directory:', __dirname);
-                console.warn('📂 Checking if uploads folder exists:', fsSync.existsSync(path.join(__dirname, '..', 'uploads')));
-                console.warn('📂 Checking if project-logo folder exists:', fsSync.existsSync(path.join(__dirname, '..', 'uploads', 'project-logo')));
-                
-                // List files in project-logo directory
-                try {
-                    const projectLogoDir = path.join(__dirname, '..', 'uploads', 'project-logo');
-                    if (fsSync.existsSync(projectLogoDir)) {
-                        const files = fsSync.readdirSync(projectLogoDir);
-                        console.warn('📂 Files in project-logo directory:', files);
-                    }
-                } catch (dirError) {
-                    console.warn('❌ Could not list project-logo directory:', dirError.message);
-                }
-                
                 return '';
             }
         } catch (error) {
@@ -169,24 +157,14 @@ class PDFGenerator {
             // 5. Generate PDF using html-pdf
             console.log('Generating PM PDF with html-pdf...');
             const options = {
-                format: 'A4',
-                orientation: 'portrait',
-                border: {
-                    top: '8mm',
-                    right: '8mm',
-                    bottom: '8mm',
-                    left: '8mm'
-                },
+                height: '297mm',      // Force A4 Height
+                width: '210mm',       // Force A4 Width
+                border: '8mm',        // Simplified border
                 type: 'pdf',
-                quality: '100',
-                dpi: 96,
-                zoomFactor: '1',
-                timeout: 30000,         // 30 seconds for PhantomJS
-                httpTimeout: 30000,     // 30 seconds for HTTP requests
-                height: '297mm',        // A4 height
-                width: '210mm',         // A4 width
-                base: `file://${__dirname}/../`,  // Base path for relative resources
-                phantomArgs: ['--web-security=no', '--local-url-access=true', '--ignore-ssl-errors=yes']
+                timeout: 120000, 
+                base: `file://${__dirname}/../`,
+                phantomArgs: ['--web-security=no', '--local-url-access=true', '--ignore-ssl-errors=yes'],
+                zoomFactor: '1.0'     // Force standard scale
             };
 
             await new Promise((resolve, reject) => {
@@ -383,7 +361,7 @@ class PDFGenerator {
         
         // Convert project logo to base64 if available
         console.log('📋 Project_Logo_Path from database:', pmData.Project_Logo_Path);
-        const projectLogoBase64 = this.getProjectLogoBase64(pmData.Project_Logo_Path);
+        const projectLogoBase64 = this.getProjectLogoBase64(pmData.Project_Logo_Path, pmData.Customer_Name);
         console.log('📋 Project_Logo_Base64 length:', projectLogoBase64 ? projectLogoBase64.length : 0);
         console.log('📋 Project logo will be included:', !!projectLogoBase64);
 
@@ -546,24 +524,14 @@ class PDFGenerator {
             // 5. Generate PDF using html-pdf
             console.log('Generating PM PDF with html-pdf...');
             const options = {
-                format: 'A4',
-                orientation: 'portrait',
-                border: {
-                    top: '8mm',
-                    right: '8mm',
-                    bottom: '8mm',
-                    left: '8mm'
-                },
+                height: '297mm',      // Force A4 Height
+                width: '210mm',       // Force A4 Width
+                border: '8mm',        // Simplified border
                 type: 'pdf',
-                quality: '100',
-                dpi: 96,
-                zoomFactor: '1',
-                timeout: 30000,         // 30 seconds for PhantomJS
-                httpTimeout: 30000,     // 30 seconds for HTTP requests
-                height: '297mm',        // A4 height
-                width: '210mm',         // A4 width
-                base: `file://${__dirname}/../`,  // Base path for relative resources
-                phantomArgs: ['--web-security=no', '--local-url-access=true', '--ignore-ssl-errors=yes']
+                timeout: 120000, 
+                base: `file://${__dirname}/../`,
+                phantomArgs: ['--web-security=no', '--local-url-access=true', '--ignore-ssl-errors=yes'],
+                zoomFactor: '1.0'     // Force standard scale
             };
 
             await new Promise((resolve, reject) => {
@@ -610,7 +578,7 @@ class PDFGenerator {
 
         // Convert logos to base64
         const logoBase64 = this.getLogoBase64();
-        const projectLogoBase64 = this.getProjectLogoBase64(assetData.Project_Logo_Path);
+        const projectLogoBase64 = this.getProjectLogoBase64(assetData.Project_Logo_Path, assetData.Customer_Name);
 
         return {
             // Mark as blank form
@@ -712,164 +680,100 @@ class PDFGenerator {
 
     /**
      * Generate bulk PDF report for multiple PM records
-     * Uses caching strategy: checks file_path, reuses existing PDFs, compiles them together
-     * @param {Array} pmRecords - Array of PM records with full details
-     * @returns {Promise<Object>} - { success, filepath, filename, absolutePath, error }
+     * Merges actual PDF files together (Prioritizes uploaded acknowledgements)
      */
     async generateBulkPM(pmRecords, blankAssets = []) {
         try {
-            console.log(`📦 Generating bulk PDF for ${pmRecords.length} PM records and ${blankAssets.length} blank forms with caching`);
+            console.log(`📦 Generating bulk PDF...`);
+            const pdfPathsToMerge = [];
 
-            // Step 1: Ensure all individual PM PDFs exist (check cache, regenerate if needed)
-            const individualPDFs = [];
-            
+            // 1. Process PM Records
             for (let i = 0; i < pmRecords.length; i++) {
                 const pmData = pmRecords[i];
-                console.log(`  Processing PM ${i + 1}/${pmRecords.length}: PM_ID ${pmData.PM_ID}`);
+                let targetPdfPath = null;
 
-                let pdfPath = null;
-
-                // Check if file_path exists in database
-                if (pmData.file_path) {
-                    console.log(`    🔍 Checking cached PDF: ${pmData.file_path}`);
-                    const fileExists = await this.checkFileExists(pmData.file_path);
-                    
-                    if (fileExists) {
-                        console.log(`    ✅ Using existing cached PDF`);
-                        pdfPath = pmData.file_path;
-                    } else {
-                        console.log(`    ⚠️  Cached file missing, regenerating...`);
+                // Priority 1: Check for manually uploaded acknowledgement first!
+                if (pmData.file_path_acknowledgement) {
+                    const ackPath = path.join(__dirname, '..', pmData.file_path_acknowledgement);
+                    if (fsSync.existsSync(ackPath)) {
+                        console.log(`    ✅ Found uploaded acknowledgement for PM_ID ${pmData.PM_ID}`);
+                        targetPdfPath = ackPath;
                     }
                 }
 
-                // If no cached PDF or file missing, generate new one
-                if (!pdfPath) {
-                    console.log(`    🔨 Generating new PDF...`);
-                    const result = await this.generatePMReport(pmData.PM_ID);
+                // Priority 2: Use or generate the digital PM report if no upload exists
+                if (!targetPdfPath) {
+                    let digitalPath = pmData.file_path ? path.join(__dirname, '..', pmData.file_path) : null;
                     
-                    if (result.success) {
-                        pdfPath = result.filepath;
-                        // Update database with new file path
-                        await this.updateFilePath(pmData.PM_ID, pdfPath);
-                        console.log(`    ✅ New PDF generated and cached`);
+                    if (digitalPath && fsSync.existsSync(digitalPath)) {
+                        console.log(`    ✅ Found cached digital report for PM_ID ${pmData.PM_ID}`);
+                        targetPdfPath = digitalPath;
                     } else {
-                        console.error(`    ❌ Failed to generate PDF for PM_ID ${pmData.PM_ID}`);
-                        continue; // Skip this PM if generation failed
+                        console.log(`    🔨 Generating digital report for PM_ID ${pmData.PM_ID}...`);
+                        const result = await this.generatePMReport(pmData.PM_ID);
+                        if (result.success) {
+                            targetPdfPath = path.join(__dirname, '..', result.filepath);
+                        } else {
+                            console.error(`    ❌ Failed to generate report for PM_ID ${pmData.PM_ID}`);
+                        }
                     }
                 }
 
-                // Add to individual PDFs list
-                individualPDFs.push({
-                    pmId: pmData.PM_ID,
-                    path: pdfPath,
-                    customer: pmData.Customer_Name,
-                    branch: pmData.Branch,
-                    data: pmData,
-                    isBlank: false
-                });
+                // Add the file to our merging list
+                if (targetPdfPath) {
+                    pdfPathsToMerge.push(targetPdfPath);
+                }
             }
 
-            // Add blank forms to the list
+            // 2. Process Blank Forms
             for (let i = 0; i < blankAssets.length; i++) {
-                const assetData = blankAssets[i];
-                console.log(`  Processing blank form ${i + 1}/${blankAssets.length}: Asset_ID ${assetData.Asset_ID}`);
-                
-                individualPDFs.push({
-                    assetId: assetData.Asset_ID,
-                    customer: assetData.Customer_Name,
-                    branch: assetData.Branch,
-                    data: assetData,
-                    isBlank: true
-                });
-            }
-
-            if (individualPDFs.length === 0) {
-                throw new Error('No valid PDFs generated');
-            }
-
-            console.log(`  ✅ All records ready (${pmRecords.length} PM records + ${blankAssets.length} blank forms)`);
-
-            // Step 2: Compile individual records into bulk PDF
-            // Load template and generate combined HTML from all records
-            const templateHtml = await fs.readFile(this.templatePath, 'utf8');
-            const template = handlebars.compile(templateHtml);
-            const htmlPages = [];
-
-            for (let i = 0; i < individualPDFs.length; i++) {
-                const pdfInfo = individualPDFs[i];
-                let templateData;
-
-                if (pdfInfo.isBlank) {
-                    // Format blank form data
-                    templateData = this.formatBlankFormData(pdfInfo.data);
-                } else {
-                    // Format regular PM data
-                    const pmData = pdfInfo.data;
-                    const pmSequenceNumber = await this.getPMSequenceNumber(pmData.PM_ID, pmData.Asset_ID);
-                    const checklistResults = await this.getChecklistResults(pmData.PM_ID);
-                    templateData = this.formatDataForTemplate(pmData, checklistResults, pmSequenceNumber);
-                }
-
-                const html = template(templateData);
-                
-                // Add page break after each record (except the last one)
-                if (i < individualPDFs.length - 1) {
-                    htmlPages.push(html + '<div style="page-break-after: always;"></div>');
-                } else {
-                    htmlPages.push(html);
+                console.log(`  🔨 Generating blank form for Asset_ID ${blankAssets[i].Asset_ID}...`);
+                const result = await this.generateBlankPMReport(blankAssets[i].Asset_ID);
+                if (result.success) {
+                    pdfPathsToMerge.push(path.join(__dirname, '..', result.filepath));
                 }
             }
 
-            // Combine all HTML
-            const combinedHtml = htmlPages.join('');
+            if (pdfPathsToMerge.length === 0) {
+                throw new Error('No valid PDFs found or generated to merge.');
+            }
 
-            // Step 3: Generate bulk PDF filename (with timestamp for uniqueness)
+            // 3. Merge all PDFs using pdf-lib
+            console.log(`  🖨️  Merging ${pdfPathsToMerge.length} PDFs together...`);
+            const mergedPdf = await PDFDocument.create();
+
+            for (const pdfPath of pdfPathsToMerge) {
+                try {
+                    const pdfBytes = await fs.readFile(pdfPath);
+                    const pdfDoc = await PDFDocument.load(pdfBytes);
+                    const copiedPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
+                    copiedPages.forEach((page) => mergedPdf.addPage(page));
+                } catch (err) {
+                    console.error(`    ❌ Error merging file ${pdfPath}:`, err.message);
+                }
+            }
+
+            // 4. Save the merged bulk PDF
             const now = new Date();
             const timestamp = now.getTime();
-            
-            // Use first record's customer and branch for bulk filename
-            const firstRecord = individualPDFs[0];
-            const customerName = this.sanitizeForFilename(firstRecord.customer || 'UNKNOWN');
-            const branchName = this.sanitizeForFilename(firstRecord.branch || 'UNKNOWN');
-            const filename = `${customerName}_${branchName}_${timestamp}.pdf`;
+            const firstRecord = pmRecords[0] || blankAssets[0];
+            const customerName = this.sanitizeForFilename(firstRecord?.Customer_Name || 'UNKNOWN');
+            const branchName = this.sanitizeForFilename(firstRecord?.Branch || 'UNKNOWN');
+            const filename = `Bulk_PM_${customerName}_${branchName}_${timestamp}.pdf`;
             const filepath = path.join(this.bulkOutputDir, filename);
 
-            // Step 4: Generate bulk PDF with html-pdf
-            console.log('  🖨️  Compiling bulk PDF...');
-            const options = {
-                format: 'A4',
-                border: {
-                    top: '10mm',
-                    right: '10mm',
-                    bottom: '10mm',
-                    left: '10mm'
-                },
-                type: 'pdf',
-                quality: '75',
-                dpi: 96,
-                zoomFactor: '1'
-            };
+            const mergedPdfBytes = await mergedPdf.save();
+            await fs.writeFile(filepath, mergedPdfBytes);
 
-            await new Promise((resolve, reject) => {
-                pdf.create(combinedHtml, options).toFile(filepath, (err, res) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(res);
-                    }
-                });
-            });
+            console.log(`✅ Bulk PDF merged successfully: ${filename}`);
 
-            console.log(`✅ Bulk PDF compiled: ${filename}`);
-
-            // Return relative path and absolute path
             const relativePath = path.relative(path.join(__dirname, '../'), filepath).replace(/\\\\/g, '/');
 
             return {
                 success: true,
                 filepath: relativePath,
                 filename: filename,
-                absolutePath: filepath, // Include absolute path for immediate download
+                absolutePath: filepath,
                 error: null
             };
 

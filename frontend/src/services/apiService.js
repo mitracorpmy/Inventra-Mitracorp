@@ -424,31 +424,6 @@ class ApiService {
     return await response.json();
   }
 
-  // Methods to fetch dropdown data
-  async getCategories() {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    const url = `${this.baseURL}/categories`;
-    try {
-      const response = await fetch(url, { headers });
-      if (!response.ok) throw new Error('Failed to fetch categories');
-      return await response.json();
-    } catch (error) {
-      console.warn('Categories endpoint not available, using fallback data');
-      // Return fallback data if endpoint doesn't exist
-      return {
-        data: [
-          { Category_ID: 1, Category: 'Desktop' },
-          { Category_ID: 2, Category: 'Printer' },
-          { Category_ID: 3, Category: 'Laptop' },
-          { Category_ID: 4, Category: 'Server' }
-        ]
-      };
-    }
-  }
-
   async getModels() {
     const headers = {
       'Content-Type': 'application/json',
@@ -532,31 +507,6 @@ class ApiService {
   }
 
   /**
-   * Search categories by name
-   */
-  async searchCategories(query) {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    const url = `${this.baseURL}/categories/search?q=${encodeURIComponent(query)}`;
-    try {
-      const response = await fetch(url, { headers });
-      if (!response.ok) throw new Error('Failed to search categories');
-      return await response.json();
-    } catch (error) {
-      console.warn('Category search endpoint not available');
-      // Fallback to client-side filtering
-      const categories = await this.getCategories();
-      const filtered = categories.data.filter(cat => 
-        cat.name.toLowerCase().includes(query.toLowerCase())
-      );
-      return { success: true, data: filtered };
-    }
-  }
-
-  /**
-   * Get or create category (hybrid functionality)
    */
   async getOrCreateCategory(name) {
     const headers = {
@@ -901,6 +851,61 @@ class ApiService {
       console.error('Failed to create history log:', error);
       throw error;
     }
+  }
+
+  // ==================== PM BULK DOWNLOAD METHODS ====================
+
+  async getPMHistoryForAssets(assetIds) {
+    return this.makeRequest('pm/bulk-history', {
+      method: 'POST',
+      body: JSON.stringify({ assetIds }),
+    });
+  }
+
+  async bulkDownloadPMReports(pmIds, blankAssetIds) {
+    // This function will trigger a file download directly, so it doesn't return JSON
+    const token = this.getToken();
+    const response = await fetch(`${this.baseURL}/pm/bulk-download`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ pmIds, blankAssetIds }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Download failed' }));
+      throw new Error(errorData.message);
+    }
+
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get('content-disposition');
+    let filename = 'pm_reports.pdf';
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+      if (filenameMatch && filenameMatch.length > 1) {
+        filename = filenameMatch[1];
+      }
+    }
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
+
+  // ==================== PM BULK SIGNATURE METHOD ====================
+
+  async bulkUploadSignature(pmIds, signature, bagiPihak) {
+    return this.makeRequest('pm/bulk-signature', {
+      method: 'POST',
+      body: JSON.stringify({ pmIds, signature, bagiPihak })
+    });
   }
 }
 

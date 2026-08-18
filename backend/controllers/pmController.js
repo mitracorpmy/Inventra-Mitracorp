@@ -772,7 +772,15 @@ const deletePM = async (req, res, next) => {
       });
     }
     
-    logger.info(`PM record deleted: PM_ID ${pmId}`);
+    // ✨ NEW: Manually record the DELETE action in the History Log ✨
+    const userId = req.user?.userId || null;
+    await pool.execute(
+      `INSERT INTO HISTORY_LOG (User_ID, Table_Name, Record_ID, Action_Type, Action_Desc, Timestamp) 
+       VALUES (?, 'PMAINTENANCE', ?, 'DELETE', ?, NOW())`,
+      [userId, pmId, `Deleted PM record (ID: ${pmId})`]
+    );
+    
+    logger.info(`PM record soft-deleted: PM_ID ${pmId}`);
     res.status(200).json({
       success: true,
       message: 'PM record deleted successfully'
@@ -1095,6 +1103,8 @@ const uploadSignature = async (req, res, next) => {
       });
     }
 
+    await pool.execute('UPDATE PMAINTENANCE SET file_path = NULL WHERE PM_ID = ?', [pmId]);
+
     logger.info(`Signature uploaded for PM #${pmId}: ${dbFilePath}`);
 
     res.status(200).json({
@@ -1139,7 +1149,7 @@ const bulkDeletePM = async (req, res, next) => {
       });
     }
 
-// Verify user is authenticated (JWT middleware should set req.user)
+    // Verify user is authenticated (JWT middleware should set req.user)
     if (!req.user || !req.user.userId) {
       return res.status(401).json({
         success: false,
@@ -1174,20 +1184,24 @@ const bulkDeletePM = async (req, res, next) => {
       });
     }
 
-    // Delete PM records (cascade will handle PM_RESULT deletion)
+    // ✨ NEW: Soft delete instead of hard delete, preserving PM_RESULT entries for restoration ✨
     let deletedCount = 0;
     const errors = [];
 
     for (const pmId of pmIds) {
       try {
-        // First delete from PM_RESULT
-        await executeQuery('DELETE FROM PM_RESULT WHERE PM_ID = ?', [pmId]);
-        
-        // Then delete from PMAINTENANCE
-        const result = await executeQuery('DELETE FROM PMAINTENANCE WHERE PM_ID = ?', [pmId]);
+        // Soft delete PMAINTENANCE (keep PM_RESULT intact so it can be restored perfectly)
+        const result = await executeQuery('UPDATE PMAINTENANCE SET is_deleted = 1 WHERE PM_ID = ?', [pmId]);
         
         if (result.affectedRows > 0) {
           deletedCount++;
+          
+          // ✨ NEW: Manually record the bulk DELETE action in the History Log ✨
+          await executeQuery(
+            `INSERT INTO HISTORY_LOG (User_ID, Table_Name, Record_ID, Action_Type, Action_Desc, Timestamp) 
+             VALUES (?, 'PMAINTENANCE', ?, 'DELETE', ?, NOW())`,
+            [req.user.userId, pmId, `Deleted PM record (ID: ${pmId})`]
+          );
         }
       } catch (error) {
         logger.error(`Error deleting PM_ID ${pmId}:`, error);
@@ -1196,7 +1210,7 @@ const bulkDeletePM = async (req, res, next) => {
     }
 
     // Log the deletion
-    logger.info(`User ${req.user.userId} deleted ${deletedCount} PM records`);
+    logger.info(`User ${req.user.userId} soft-deleted ${deletedCount} PM records`);
 
     res.status(200).json({
       success: true,
@@ -1248,6 +1262,145 @@ const markAsCompleted = async (req, res, next) => {
   }
 };
 
+/**
+ * Get PM history for multiple assets (For Bulk Download)
+ */
+const getPMHistoryForAssets = async (req, res, next) => {
+  try {
+    // Check if frontend sent { assetIds: [...] } or just [...]
+    const assetIds = req.body.assetIds || req.body;
+    
+    if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
+      return res.json({ data: {} });
+    }
+
+    // Create ?,?,? placeholders for SQL query based on how many assets were selected
+    const placeholders = assetIds.map(() => '?').join(',');
+    
+    // ✨ NEW: Added `is_deleted = 0` so deleted forms don't show up in the Bulk Download modal ✨
+    const [records] = await pool.execute(
+      `SELECT PM_ID, Asset_ID, PM_Date, Status 
+       FROM PMAINTENANCE 
+       WHERE Asset_ID IN (${placeholders}) AND is_deleted = 0
+       ORDER BY Asset_ID, PM_Date ASC`,
+      assetIds
+    );
+
+    // Group the records by Asset_ID and figure out which one is PM1, PM2, PM3, etc.
+    const historyData = {};
+    
+    // Initialize empty arrays for all requested assets so they at least get 'Blank' forms
+    assetIds.forEach(id => { historyData[id] = []; });
+
+    // Populate with actual records and assign the pmSequence
+    records.forEach(record => {
+      const assetId = record.Asset_ID;
+      historyData[assetId].push({
+        ...record,
+        pmSequence: historyData[assetId].length + 1 // Dynamically assigns PM 1, 2, 3 based on date
+      });
+    });
+
+    // Send the correctly formatted data back to the modal
+    res.status(200).json({ success: true, data: historyData });
+
+  } catch (error) {
+    logger.error('Error in getPMHistoryForAssets:', error);
+    // Send a proper error object so the frontend knows it failed
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * Bulk upload user signature (Base64 image) for multiple PM records
+ */
+const bulkUploadSignature = async (req, res, next) => {
+  try {
+    const { pmIds, signature, bagiPihak } = req.body;
+
+    // Validate inputs
+    if (!pmIds || !Array.isArray(pmIds) || pmIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'An array of PM IDs is required'
+      });
+    }
+
+    if (!signature) {
+      return res.status(400).json({
+        success: false,
+        error: 'Signature data is required'
+      });
+    }
+
+    if (!signature.startsWith('data:image/png;base64,')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid signature format. Must be Base64 PNG image'
+      });
+    }
+
+    // Extract Base64 data
+    const base64Data = signature.replace(/^data:image\/png;base64,/, '');
+    
+    const uploadDir = path.join(__dirname, '../uploads/signature');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // Generate a single bulk signature file to save storage space
+    const timestamp = Date.now();
+    const filename = `bulk_signature_${timestamp}.png`;
+    const filePath = path.join(uploadDir, filename);
+    
+    // Save the PNG file once
+    fs.writeFileSync(filePath, base64Data, 'base64');
+    
+    const dbFilePath = `uploads/signature/${filename}`;
+    const signedAt = new Date();
+    
+    let successCount = 0;
+    const errors = [];
+
+    // Apply the signature to all selected PM records
+    for (const pmId of pmIds) {
+      try {
+        const updated = await PMaintenance.updateSignature(pmId, dbFilePath, signedAt, bagiPihak);
+        if (updated) {
+          await pool.execute('UPDATE PMAINTENANCE SET file_path = NULL WHERE PM_ID = ?', [pmId]);
+          successCount++;
+        } else {
+          errors.push({ pmId, error: 'PM record not found or update failed' });
+        }
+      } catch (err) {
+        logger.error(`Error updating signature for PM #${pmId}:`, err);
+        errors.push({ pmId, error: err.message });
+      }
+    }
+
+    logger.info(`Bulk signature applied to ${successCount} PM records. Saved at: ${dbFilePath}`);
+
+    res.status(200).json({
+      success: true,
+      message: `Signature applied to ${successCount} PM records successfully`,
+      data: {
+        successCount,
+        failedCount: errors.length,
+        errors: errors.length > 0 ? errors : undefined,
+        signature_path: dbFilePath,
+        signed_at: signedAt
+      }
+    });
+  } catch (error) {
+    logger.error('Error in bulkUploadSignature:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to bulk upload signature',
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllPM,
   getPMStatistics,
@@ -1274,5 +1427,7 @@ module.exports = {
   deleteAcknowledgement,
   uploadSignature,
   bulkDeletePM,
-  markAsCompleted
+  markAsCompleted,
+  getPMHistoryForAssets,
+  bulkUploadSignature
 };

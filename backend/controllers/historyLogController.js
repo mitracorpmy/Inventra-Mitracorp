@@ -1,4 +1,5 @@
 const HistoryLog = require('../models/HistoryLog');
+const { pool } = require('../config/database');
 
 /**
  * Get history logs with pagination and filters
@@ -346,6 +347,81 @@ exports.getFilterOptions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching filter options'
+    });
+  }
+};
+
+/**
+ * ✨ NEW: Undo a soft-deleted record ✨
+ * Reads the History Log, finds what was deleted, and restores it.
+ */
+exports.undoAction = async (req, res) => {
+  try {
+    const { logId } = req.params;
+
+    // 1. Fetch the history log entry to see what we are dealing with
+    const [logEntries] = await pool.execute(
+      'SELECT * FROM HISTORY_LOG WHERE Log_ID = ? AND Action_Type = "DELETE"',
+      [logId]
+    );
+
+    if (logEntries.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Valid DELETE audit log not found.'
+      });
+    }
+
+    const log = logEntries[0];
+    const { Table_Name, Record_ID } = log;
+
+    // 2. Route the undo action to the correct table
+    if (Table_Name.toUpperCase() === 'PMAINTENANCE') {
+      const PMaintenance = require('../models/PMaintenance');
+      
+      // Call the restore function we built in PMaintenance
+      const restored = await PMaintenance.restorePM(Record_ID);
+      
+      if (!restored) {
+        return res.status(400).json({
+          success: false,
+          message: `Could not restore record. It may already be active or missing.`
+        });
+      }
+
+    } else {
+      // If they try to undo a delete on a table we haven't built soft-deletes for yet
+      return res.status(400).json({
+        success: false,
+        message: `Undo is not currently supported for the ${Table_Name} table.`
+      });
+    }
+
+    // 3. Log the "Undo" action into the history log so there is a trail!
+    const userId = req.user?.userId || null;
+    await pool.execute(
+      `INSERT INTO HISTORY_LOG (User_ID, Table_Name, Record_ID, Action_Type, Action_Desc, Timestamp) 
+       VALUES (?, ?, ?, 'RESTORE', ?, NOW())`,
+      [
+        userId, 
+        Table_Name, 
+        Record_ID, 
+        `Restored deleted record (ID: ${Record_ID}) from ${Table_Name}`
+      ]
+    );
+
+    console.log(`User ${userId} successfully restored Record_ID ${Record_ID} in ${Table_Name}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Record restored successfully'
+    });
+
+  } catch (error) {
+    console.error('Error in undoAction:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to undo action'
     });
   }
 };

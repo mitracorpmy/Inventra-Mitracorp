@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import usePageTitle from '../hooks/usePageTitle';
 import { User, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import bgImage from '../assets/INVENTRALOGIN.png';
+import logoImage from '../assets/logo.png'; 
 
 const Login = ({ onLogin }) => {
   usePageTitle('Login');
@@ -30,7 +32,6 @@ const Login = ({ onLogin }) => {
       const data = await response.json();
 
       if (data.success) {
-        // Store token and user info in localStorage
         localStorage.setItem('authToken', data.data.token);
         localStorage.setItem('userInfo', JSON.stringify(data.data.user));
         onLogin();
@@ -46,9 +47,27 @@ const Login = ({ onLogin }) => {
   };
 
   return (
-    <div className="login-container">
+    <div 
+      className="login-container" 
+      style={{ 
+        backgroundImage: `url(${bgImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        position: 'relative' /* ✨ Added so the footer can anchor to the bottom ✨ */
+      }}
+    >
       <div className="login-card">
+        <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+          <img 
+            src={logoImage} 
+            alt="Mitracorp Logo" 
+            style={{ maxWidth: '180px', height: 'auto' }} 
+          />
+        </div>
+
         <h2 className="login-title">Inventory Management System</h2>
+        
         {error && (
           <div style={{
             padding: '12px',
@@ -127,6 +146,22 @@ const Login = ({ onLogin }) => {
           </button>
         </form>
       </div>
+
+      {/* ✨ NEW: Mitracorp Disclaimer Footer ✨ */}
+      <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        width: '100%',
+        textAlign: 'center',
+        color: '#ffffff',
+        fontSize: '13px',
+        fontWeight: '500',
+        letterSpacing: '0.5px',
+        textShadow: '0 2px 4px rgba(0, 0, 0, 0.8)' /* Keeps it readable over light areas */
+      }}>
+        System developed by Mitracorp Resources Sdn. Bhd.
+      </div>
+
     </div>
   );
 };
