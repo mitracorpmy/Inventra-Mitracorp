@@ -494,23 +494,54 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #87ceeb, #4682b4);
+  /* The linear-gradient has been removed so the image from Login.js can shine! */
 }
 
 .login-card {
-  background: white;
+  /* Swapped solid white to 90% white for a modern frosted glass effect */
+  background: #ffffff;
   padding: 40px;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  border-radius: 12px;
+  /* Made the shadow slightly deeper to separate it from the busy image */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   width: 100%;
   max-width: 400px;
+  
+  /* Blurs the server room image exactly where the card sits */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+/* Style for the Login Button */
+.login-card .btn-primary {
+  background-color: #71c55d; /* Soft Green */
+  border-color: #71c55d;
+  color: white;
+  transition: all 0.3s ease; /* Makes the color change smooth */
+}
+
+/* Hover state for the Login Button */
+.login-card .btn-primary:hover:not(:disabled) {
+  background-color: #228b22; /* Forest Green */
+  border-color: #228b22;
+  box-shadow: 0 4px 12px rgba(34, 139, 34, 0.4); /* Optional: Adds a nice green glowing shadow on hover */
+}
+
+/* Disabled state (when the user clicks and it says "Logging in...") */
+.login-card .btn-primary:disabled {
+  background-color: #a8d59d; /* Even softer, faded green */
+  border-color: #a8d59d;
+  cursor: not-allowed;
 }
 
 .login-title {
   text-align: center;
   margin-bottom: 30px;
-  color: #4682b4;
+  /* Darkened the text slightly so it pops against the glass background */
+  color: #1e3a8a; 
   font-size: 1.8rem;
+  font-weight: bold;
 }
 
 /* Status badges */
