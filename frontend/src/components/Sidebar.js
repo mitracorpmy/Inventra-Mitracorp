@@ -156,30 +156,29 @@ const Sidebar = ({ onLogout, onMinimizeChange }) => {
     <>
       {/* Mobile Hamburger Button */}
       {isMobile && (
-        <button
-          className="mobile-menu-toggle"
-          onClick={() => setIsMobileOpen(!isMobileOpen)}
-          style={{
-            position: 'fixed',
-            top: '15px',
-            left: '15px',
-            zIndex: 1002,
-            background: 'linear-gradient(135deg, #667eea, #764ba2)',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '12px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-          onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >
-          {isMobileOpen ? <X size={24} color="white" /> : <Menu size={24} color="white" />}
-        </button>
+        <button 
+            type="button"
+            onClick={(e) => {
+              if (isPMDeleteMode) {
+                e.preventDefault();
+                handleShowDeleteModeToast();
+              } else {
+                onLogout();
+              }
+            }}
+            // ✨ CHANGED: logout-item is now logout-btn ✨
+            className="nav-item logout-btn"
+            title={sidebarWidth < 150 ? 'Logout' : ''}
+            style={{
+              justifyContent: sidebarWidth < 150 ? 'center' : 'flex-start',
+              padding: sidebarWidth < 150 ? '12px' : '12px 20px',
+              opacity: isPMDeleteMode ? 0.5 : 1,
+              cursor: isPMDeleteMode ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <LogOut className="nav-icon" />
+            {sidebarWidth >= 150 && <span>Logout</span>}
+          </button>
       )}
 
       {/* Mobile Overlay */}
